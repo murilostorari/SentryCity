@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+/* Apply Inter font globally */
+body {
+  font-family: var(--font-sans);
+}
+
+/* Hide default Google Maps InfoWindow chrome */
+.gm-style-iw {
+  background: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.gm-style-iw-c {
+  background: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.gm-style-iw-d {
+  overflow: visible !important;
+  background: none !important;
+  padding: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.gm-style-iw-tc {
+  display: none !important;
+}
+
+.gm-ui-hover-effect {
+  display: none !important;
+}
+
+button.gm-ui-hover-effect {
+  display: none !important;
+}
+
+/* MapLibre Popup Customization */
+.maplibregl-popup-content {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+.maplibregl-popup-tip {
+  display: none !important;
+}
+
+.maplibregl-popup-close-button {
+  display: none !important;
+}

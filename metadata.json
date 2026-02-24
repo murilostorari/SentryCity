@@ -1,0 +1,5 @@
+{
+  "name": "Refinity EV Dashboard",
+  "description": "A dashboard for managing EV charging stations, featuring a map view, station details, and real-time monitoring.",
+  "requestFramePermissions": []
+}
