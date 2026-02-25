@@ -50,6 +50,10 @@ button.gm-ui-hover-effect {
 }
 
 /* MapLibre Popup Customization */
+.maplibregl-popup {
+  z-index: 100 !important;
+}
+
 .maplibregl-popup-content {
   background: transparent !important;
   box-shadow: none !important;

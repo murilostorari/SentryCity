@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users } from 'lucide-react';
 import { BarChart, Bar, ResponsiveContainer, AreaChart, Area, CartesianGrid, YAxis } from 'recharts';
+import { Incident } from '../App';
 
 const timelineData = Array.from({ length: 24 }).map((_, i) => ({
   time: `${i}:00`,
@@ -13,8 +14,28 @@ const severityData = Array.from({ length: 24 }).map((_, i) => ({
   value: 30 + Math.random() * 40 + (i > 15 ? 20 : 0)
 }));
 
-export default function StationDetails({ onClose }: { onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState('Details');
+export default function StationDetails({ incident, onClose }: { incident: Incident, onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState('Detalhes');
+
+  const translateSeverity = (sev: string) => {
+    switch(sev) {
+      case 'critical': return 'Crítico';
+      case 'high': return 'Alto';
+      case 'medium': return 'Médio';
+      case 'low': return 'Baixo';
+      default: return sev;
+    }
+  };
+
+  const getSeverityColor = (sev: string) => {
+    switch(sev) {
+      case 'critical': return 'bg-red-100 dark:bg-[#3A1D1D] text-red-600 dark:text-[#E54D4D]';
+      case 'high': return 'bg-orange-100 dark:bg-[#3A2D1D] text-orange-600 dark:text-[#F97316]';
+      case 'medium': return 'bg-yellow-100 dark:bg-[#3A351D] text-yellow-600 dark:text-[#F59E0B]';
+      case 'low': return 'bg-green-100 dark:bg-[#1D3A2D] text-green-600 dark:text-[#10B981]';
+      default: return 'bg-gray-100 dark:bg-[#2A2A2A] text-gray-600 dark:text-[#888888]';
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-xl shadow-2xl h-full flex flex-col overflow-hidden transition-colors duration-300">
@@ -23,12 +44,14 @@ export default function StationDetails({ onClose }: { onClose: () => void }) {
         <div className="flex items-start justify-between mb-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-lg font-medium text-gray-900 dark:text-white">INC-001</h2>
-              <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-[#3A1D1D] text-red-600 dark:text-[#E54D4D] text-xs font-bold uppercase tracking-wide">Critical</span>
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white">{incident.id}</h2>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getSeverityColor(incident.severity)}`}>
+                {translateSeverity(incident.severity)}
+              </span>
             </div>
             <div className="flex items-center gap-1.5 text-gray-500 dark:text-[#888888] text-sm">
               <MapPin size={12} />
-              <span>Jan Luijkenstraat 11, Amsterdam</span>
+              <span>{incident.lat.toFixed(4)}, {incident.lng.toFixed(4)}</span>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center text-gray-500 dark:text-[#888888] hover:text-black dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#333333] transition-colors">
@@ -38,16 +61,16 @@ export default function StationDetails({ onClose }: { onClose: () => void }) {
 
         {/* Tabs */}
         <div className="flex items-center gap-6 border-b border-gray-200 dark:border-[#2C2C2C]">
-          <Tab label="Details" active={activeTab === 'Details'} onClick={() => setActiveTab('Details')} />
-          <Tab label="Timeline" active={activeTab === 'Timeline'} badge="New" onClick={() => setActiveTab('Timeline')} />
-          <Tab label="Resources" active={activeTab === 'Resources'} onClick={() => setActiveTab('Resources')} />
+          <Tab label="Detalhes" active={activeTab === 'Detalhes'} onClick={() => setActiveTab('Detalhes')} />
+          <Tab label="Linha do Tempo" active={activeTab === 'Linha do Tempo'} badge="Novo" onClick={() => setActiveTab('Linha do Tempo')} />
+          <Tab label="Recursos" active={activeTab === 'Recursos'} onClick={() => setActiveTab('Recursos')} />
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-5">
-        {activeTab === 'Details' && <DetailsTab />}
-        {activeTab === 'Timeline' && <TimelineTab />}
+        {activeTab === 'Detalhes' && <DetailsTab incident={incident} translateSeverity={translateSeverity} />}
+        {activeTab === 'Linha do Tempo' && <TimelineTab />}
       </div>
     </div>
   );
@@ -72,20 +95,20 @@ function Tab({ label, active, badge, onClick }: any) {
   );
 }
 
-function DetailsTab() {
+function DetailsTab({ incident, translateSeverity }: { incident: Incident, translateSeverity: (s: string) => string }) {
   return (
     <div className="space-y-6">
       <div className="bg-red-50 dark:bg-[#3A1D1D] border border-red-200 dark:border-[#4A2525] rounded-lg p-3 flex items-start gap-3 text-red-700 dark:text-[#E54D4D] text-sm">
         <AlertTriangle size={16} className="shrink-0 mt-0.5" />
         <div>
-          <span className="font-bold block mb-0.5">High Priority Incident</span>
-          <span className="opacity-90">Multiple reports received. Emergency services dispatched.</span>
+          <span className="font-bold block mb-0.5">{incident.title}</span>
+          <span className="opacity-90">{incident.description}</span>
         </div>
       </div>
 
       <div>
         <div className="flex items-center gap-1.5 mb-4">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Report Frequency</h3>
+          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Frequência de Relatos</h3>
           <Info size={14} className="text-gray-400 dark:text-[#666666]" />
         </div>
         <div className="h-[140px] w-full relative">
@@ -96,21 +119,21 @@ function DetailsTab() {
           </ResponsiveContainer>
           <div className="flex justify-between text-xs text-gray-400 dark:text-[#666666] mt-2">
             <span>-24h</span>
-            <span>Now</span>
+            <span>Agora</span>
           </div>
         </div>
       </div>
 
       <div>
-        <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-4 uppercase">Incident Information</h3>
+        <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-4 uppercase">Informações do Incidente</h3>
         <div className="space-y-4">
-          <DetailRow label="Type" value="Major Collision" />
-          <DetailRow label="Source" value="OSINT / Twitter" />
-          <DetailRow label="Status" value={<span className="text-red-600 dark:text-[#EF4444] flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-[#EF4444] animate-pulse"></div>Active</span>} />
-          <DetailRow label="ID" value={<div className="flex items-center justify-between w-full"><span>INC-001-2024</span><Copy size={14} className="text-gray-400 dark:text-[#666666] cursor-pointer hover:text-black dark:hover:text-white transition-colors" /></div>} hasInfo />
-          <DetailRow label="Severity" value="Level 4 (Critical)" />
-          <DetailRow label="Reported" value={<span className="flex items-center gap-1.5"><Clock size={14} /> 12 mins ago</span>} hasInfo />
-          <DetailRow label="Impact" value="Traffic blocked (2 lanes)" />
+          <DetailRow label="Tipo" value={incident.type} />
+          <DetailRow label="Fonte" value="OSINT / Twitter" />
+          <DetailRow label="Status" value={<span className="text-red-600 dark:text-[#EF4444] flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-[#EF4444] animate-pulse"></div>{incident.status}</span>} />
+          <DetailRow label="ID" value={<div className="flex items-center justify-between w-full"><span>{incident.id}</span><Copy size={14} className="text-gray-400 dark:text-[#666666] cursor-pointer hover:text-black dark:hover:text-white transition-colors" /></div>} hasInfo />
+          <DetailRow label="Severidade" value={translateSeverity(incident.severity)} />
+          <DetailRow label="Reportado" value={<span className="flex items-center gap-1.5"><Clock size={14} /> {incident.time}</span>} hasInfo />
+          <DetailRow label="Impacto" value={`${incident.radius}m de raio`} />
         </div>
       </div>
     </div>
@@ -124,7 +147,7 @@ function DetailRow({ label, value, hasInfo }: any) {
         {label}
         {hasInfo && <Info size={12} className="text-gray-400 dark:text-[#444444]" />}
       </div>
-      <div className="text-gray-900 dark:text-white w-2/3 text-right flex justify-end">{value}</div>
+      <div className="text-gray-900 dark:text-white w-2/3 text-right flex justify-end capitalize">{value}</div>
     </div>
   );
 }
@@ -134,7 +157,7 @@ function TimelineTab() {
     <div className="space-y-6">
       <div>
         <div className="flex items-center gap-1.5 mb-4">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Severity Trend</h3>
+          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Tendência de Severidade</h3>
           <Info size={14} className="text-gray-400 dark:text-[#666666]" />
         </div>
         <div className="h-[140px] w-full relative">
@@ -156,25 +179,25 @@ function TimelineTab() {
 
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-[#2C2C2C] pb-6">
         <div>
-          <div className="text-gray-500 dark:text-[#888888] text-[10px] font-bold tracking-wider uppercase mb-1">Reports</div>
+          <div className="text-gray-500 dark:text-[#888888] text-[10px] font-bold tracking-wider uppercase mb-1">Relatos</div>
           <div className="text-2xl font-medium text-gray-900 dark:text-white">42</div>
         </div>
         <div>
-          <div className="text-gray-500 dark:text-[#888888] text-xs font-bold tracking-wider uppercase mb-1">Confidence</div>
+          <div className="text-gray-500 dark:text-[#888888] text-xs font-bold tracking-wider uppercase mb-1">Confiança</div>
           <div className="text-2xl font-medium text-gray-900 dark:text-white">98%</div>
         </div>
         <div>
-          <div className="text-gray-500 dark:text-[#888888] text-xs font-bold tracking-wider uppercase mb-1">Est. Clear</div>
+          <div className="text-gray-500 dark:text-[#888888] text-xs font-bold tracking-wider uppercase mb-1">Est. Limpeza</div>
           <div className="text-2xl font-medium text-gray-900 dark:text-white">2h</div>
         </div>
       </div>
 
       <div>
-        <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-4 uppercase">Live Updates</h3>
+        <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-4 uppercase">Atualizações ao Vivo</h3>
         <div className="space-y-2">
-          <TimelineItem time="12m ago" source="Twitter" content="Major accident reported at Jan Luijkenstraat. Avoid area." status="critical" />
-          <TimelineItem time="15m ago" source="Waze" content="Heavy traffic detected. Speed 5km/h." status="warning" />
-          <TimelineItem time="20m ago" source="Sensor" content="Noise anomaly detected (Crash signature)." status="info" />
+          <TimelineItem time="12m atrás" source="Twitter" content="Acidente grave relatado na Jan Luijkenstraat. Evite a área." status="critical" />
+          <TimelineItem time="15m atrás" source="Waze" content="Tráfego intenso detectado. Velocidade 5km/h." status="warning" />
+          <TimelineItem time="20m atrás" source="Sensor" content="Anomalia de ruído detectada (Assinatura de colisão)." status="info" />
         </div>
       </div>
     </div>
