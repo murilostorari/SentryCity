@@ -82,6 +82,11 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
                 <option value="power">Energia</option>
                 <option value="weather">Clima</option>
                 <option value="pothole">Buraco</option>
+                <option value="show">Show/Concerto</option>
+                <option value="party">Festa/Evento</option>
+                <option value="noise">Barulho/Reclamação</option>
+                <option value="inauguration">Inauguração</option>
+                <option value="other">Outro</option>
               </select>
             </div>
 

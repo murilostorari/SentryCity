@@ -1,4 +1,4 @@
-import { Zap, AlertTriangle, CloudRain, Construction, ArrowRight, X, AlertOctagon } from 'lucide-react';
+import { Zap, AlertTriangle, CloudRain, Construction, ArrowRight, X, AlertOctagon, Music, PartyPopper, Megaphone, Star, HelpCircle } from 'lucide-react';
 import { Incident } from '../App';
 
 interface IncidentPopupProps {
@@ -15,7 +15,11 @@ export default function IncidentPopup({ incident, onOpenDetails, onClose, isDark
       case 'power': return <Zap size={18} className="text-gray-900 dark:text-white" />;
       case 'weather': return <CloudRain size={18} className="text-gray-900 dark:text-white" />;
       case 'pothole': return <Construction size={18} className="text-gray-900 dark:text-white" />;
-      default: return <AlertOctagon size={18} className="text-gray-900 dark:text-white" />;
+      case 'show': return <Music size={18} className="text-gray-900 dark:text-white" />;
+      case 'party': return <PartyPopper size={18} className="text-gray-900 dark:text-white" />;
+      case 'noise': return <Megaphone size={18} className="text-gray-900 dark:text-white" />;
+      case 'inauguration': return <Star size={18} className="text-gray-900 dark:text-white" />;
+      default: return <HelpCircle size={18} className="text-gray-900 dark:text-white" />;
     }
   };
 
@@ -69,12 +73,12 @@ export default function IncidentPopup({ incident, onOpenDetails, onClose, isDark
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-gray-900 dark:text-white font-bold text-lg">{incident.id}</span>
+              <span className="text-gray-900 dark:text-white font-bold text-lg">{incident.title}</span>
               <div className={`w-2 h-2 rounded-full ${getSeverityColor()}`}></div>
             </div>
-            <div className="flex items-center gap-1 text-gray-500 dark:text-[#888888] text-xs mt-0.5">
-              <AlertOctagon size={12} />
-              <span>{incident.title}</span>
+            <div className="flex items-center gap-1 text-gray-500 dark:text-[#888888] text-xs mt-0.5 min-w-0">
+              <AlertOctagon size={12} className="shrink-0" />
+              <span className="truncate">{incident.address}</span>
             </div>
           </div>
         </div>

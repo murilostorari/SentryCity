@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Incident } from '../App';
 import IncidentMarker from './IncidentMarker';
 import IncidentPopup from './IncidentPopup';
+import OffScreenIndicator from './OffScreenIndicator';
 
 // Carto basemap styles (free to use without API key for dev/demo)
 const DARK_MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -50,49 +51,97 @@ export default function MapArea({
   selectedStation,
   onOpenDetails,
   showDetails,
-  isDarkMode
+  isDarkMode,
+  flyToCoordinates,
+  isNewsModalOpen
 }: { 
   incidents: Incident[],
   onSelectStation: (id: string | null) => void, 
   selectedStation: string | null,
   onOpenDetails: () => void,
   showDetails: boolean,
-  isDarkMode: boolean
+  isDarkMode: boolean,
+  flyToCoordinates?: { lat: number, lng: number, zoom?: number } | null,
+  isNewsModalOpen?: boolean
 }) {
   const mapRef = useRef<MapRef>(null);
   const [is3D, setIs3D] = useState(true);
+  
+  // Off-screen indicator state
+  const [isOffScreen, setIsOffScreen] = useState(false);
+  const [bearingToIncident, setBearingToIncident] = useState(0);
+
+  // Find selected incident object
+  const selectedIncidentData = incidents.find(s => s.id === selectedStation);
+
+  // Handle map movement to update off-screen indicator
+  const handleMapMove = () => {
+    if (!mapRef.current || !selectedIncidentData) {
+      setIsOffScreen(false);
+      return;
+    }
+
+    const map = mapRef.current.getMap();
+    const bounds = map.getBounds();
+    const incidentLngLat = { lng: selectedIncidentData.lng, lat: selectedIncidentData.lat };
+
+    // Check if incident is in view
+    const inView = bounds.contains(incidentLngLat);
+    setIsOffScreen(!inView);
+
+    if (!inView) {
+      // Calculate bearing for arrow
+      const center = map.getCenter();
+      const centerPixel = map.project(center);
+      const targetPixel = map.project(incidentLngLat);
+      
+      // Calculate angle in radians
+      const angleRad = Math.atan2(targetPixel.y - centerPixel.y, targetPixel.x - centerPixel.x);
+      
+      // Convert to degrees and adjust for arrow pointing up (add 90 degrees)
+      // atan2 returns angle from X axis (Right). ArrowUp points Up (-Y).
+      // So 0 deg (Right) should rotate arrow 90 deg.
+      // Wait, let's simplify:
+      // If target is to the Right (0 deg), arrow should point Right (90 deg rotation).
+      // If target is Up (-90 deg), arrow should point Up (0 deg rotation).
+      // Formula: (angleRad * 180 / Math.PI) + 90
+      const angleDeg = (angleRad * 180 / Math.PI) + 90;
+      setBearingToIncident(angleDeg);
+    }
+  };
+
+  // Update indicator when selection changes
+  useEffect(() => {
+    handleMapMove();
+  }, [selectedStation, selectedIncidentData]);
+
+  // Handle FlyTo
+  useEffect(() => {
+    if (flyToCoordinates && mapRef.current) {
+      mapRef.current.flyTo({
+        center: [flyToCoordinates.lng, flyToCoordinates.lat],
+        zoom: flyToCoordinates.zoom || 13,
+        duration: 2000,
+        essential: true
+      });
+    }
+  }, [flyToCoordinates]);
   
   // State for affected area animation
   const [activeArea, setActiveArea] = useState<any>(null);
   const [areaOpacity, setAreaOpacity] = useState(0);
 
-  // Find selected incident object
-  const selectedIncidentData = incidents.find(s => s.id === selectedStation);
-
   // Handle affected area transitions
   useEffect(() => {
     if (selectedStation && selectedIncidentData) {
-      // Fade out old area first if exists
-      if (activeArea) {
-        setAreaOpacity(0);
-        setTimeout(() => {
-          const newArea = createGeoJSONCircle(
-            [selectedIncidentData.lng, selectedIncidentData.lat], 
-            selectedIncidentData.radius / 1000 // Convert meters to km
-          );
-          setActiveArea(newArea);
-          setAreaOpacity(1);
-        }, 300); // Wait for fade out
-      } else {
-        // First selection, just fade in
-        const newArea = createGeoJSONCircle(
-          [selectedIncidentData.lng, selectedIncidentData.lat], 
-          selectedIncidentData.radius / 1000
-        );
-        setActiveArea(newArea);
-        // Small delay to ensure render happens before opacity transition
-        setTimeout(() => setAreaOpacity(1), 50);
-      }
+      // Immediate update for responsiveness
+      const newArea = createGeoJSONCircle(
+        [selectedIncidentData.lng, selectedIncidentData.lat], 
+        selectedIncidentData.radius / 1000 // Convert meters to km
+      );
+      setActiveArea(newArea);
+      // Small delay to ensure render happens before opacity transition
+      requestAnimationFrame(() => setAreaOpacity(1));
     } else {
       // Deselect - fade out
       setAreaOpacity(0);
@@ -101,7 +150,7 @@ export default function MapArea({
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [selectedStation]);
+  }, [selectedStation, selectedIncidentData]);
 
   // Define static zones
   const highRiskZone = useMemo(() => createGeoJSONCircle([4.885, 52.362], 0.4), []);
@@ -143,9 +192,29 @@ export default function MapArea({
         mapStyle={isDarkMode ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
         attributionControl={false}
         onClick={() => onSelectStation(null)}
+        onMove={handleMapMove}
       >
+        {/* Off-Screen Indicator */}
+        <AnimatePresence>
+          {selectedIncidentData && isOffScreen && (
+            <OffScreenIndicator
+              incident={selectedIncidentData}
+              angle={bearingToIncident}
+              onClose={() => onSelectStation(null)}
+              onClick={() => {
+                mapRef.current?.flyTo({
+                  center: [selectedIncidentData.lng, selectedIncidentData.lat],
+                  zoom: 14,
+                  duration: 1500
+                });
+              }}
+              isDarkMode={isDarkMode}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Custom Controls Container */}
-        <div className="absolute bottom-24 right-[10px] z-10 flex flex-col gap-2">
+        <div className="absolute bottom-8 right-[10px] z-10 flex flex-col gap-2">
           {/* 2D/3D Toggle */}
           <button
             onClick={() => setIs3D(!is3D)}
@@ -266,7 +335,7 @@ export default function MapArea({
 
         {/* Popup with AnimatePresence for exit animations */}
         <AnimatePresence mode="wait">
-          {selectedStation && selectedIncidentData && !showDetails && (
+          {selectedStation && selectedIncidentData && !showDetails && !isNewsModalOpen && (
             <Popup
               key={selectedStation} // Key is crucial for AnimatePresence to detect changes
               longitude={selectedIncidentData.lng}

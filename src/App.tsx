@@ -16,6 +16,7 @@ export interface Incident {
   status: string;
   title: string;
   description: string;
+  address: string;
   time: string;
   radius: number;
   timestamp: number;
@@ -26,7 +27,7 @@ export interface Incident {
     imageUrl: string;
     url: string;
     time: string;
-  };
+  }[];
 }
 
 // Mock data for incidents
@@ -40,17 +41,36 @@ const INITIAL_INCIDENTS: Incident[] = [
     status: 'active', 
     title: 'Colisão Grave', 
     description: 'Acidente com múltiplos veículos bloqueando duas faixas.', 
+    address: 'Av. Paulista, 1578 - Bela Vista, São Paulo - SP',
     time: '12m atrás', 
     radius: 300, 
     timestamp: Date.now() - 12 * 60 * 1000,
-    news: {
-      source: 'G1 Globo',
-      title: 'Acidente grave bloqueia trânsito no centro da cidade após colisão múltipla',
-      description: 'Uma colisão envolvendo três veículos causou um grande congestionamento na manhã desta terça-feira. Equipes de resgate estão no local para atender as vítimas e liberar a via o mais rápido possível.',
-      imageUrl: 'https://picsum.photos/seed/accident/300/200',
-      url: 'https://g1.globo.com',
-      time: '10 min atrás'
-    }
+    news: [
+      {
+        source: 'G1 Globo',
+        title: 'Acidente grave bloqueia trânsito no centro da cidade após colisão múltipla',
+        description: 'Uma colisão envolvendo três veículos causou um grande congestionamento na manhã desta terça-feira. Equipes de resgate estão no local para atender as vítimas e liberar a via o mais rápido possível.',
+        imageUrl: 'https://picsum.photos/seed/accident/300/200',
+        url: 'https://g1.globo.com',
+        time: '10 min atrás'
+      },
+      {
+        source: 'R7 Notícias',
+        title: 'Trânsito parado na região central devido a acidente',
+        description: 'Motoristas devem evitar a área. CET recomenda rotas alternativas.',
+        imageUrl: 'https://picsum.photos/seed/traffic/300/200',
+        url: 'https://r7.com',
+        time: '15 min atrás'
+      },
+      {
+        source: 'BandNews',
+        title: 'Bombeiros atuam em resgate de vítimas de colisão',
+        description: 'Duas pessoas ficaram feridas e foram encaminhadas ao hospital mais próximo.',
+        imageUrl: 'https://picsum.photos/seed/rescue/300/200',
+        url: 'https://band.uol.com.br',
+        time: '20 min atrás'
+      }
+    ]
   },
   { 
     id: 'INC-002', 
@@ -61,21 +81,32 @@ const INITIAL_INCIDENTS: Incident[] = [
     status: 'active', 
     title: 'Queda de Energia', 
     description: 'Falha de energia em todo o distrito relatada.', 
+    address: 'Rua Augusta, 500 - Consolação, São Paulo - SP',
     time: '45m atrás', 
     radius: 1200, 
     timestamp: Date.now() - 45 * 60 * 1000,
-    news: {
-      source: 'CNN Brasil',
-      title: 'Apagão atinge diversos bairros da zona sul; concessionária investiga causas',
-      description: 'Moradores relatam falta de luz desde as 14h. Semáforos apagados causam confusão no trânsito da região.',
-      imageUrl: 'https://picsum.photos/seed/power/300/200',
-      url: 'https://www.cnnbrasil.com.br',
-      time: '40 min atrás'
-    }
+    news: [
+      {
+        source: 'CNN Brasil',
+        title: 'Apagão atinge diversos bairros da zona sul; concessionária investiga causas',
+        description: 'Moradores relatam falta de luz desde as 14h. Semáforos apagados causam confusão no trânsito da região.',
+        imageUrl: 'https://picsum.photos/seed/power/300/200',
+        url: 'https://www.cnnbrasil.com.br',
+        time: '40 min atrás'
+      },
+      {
+        source: 'Folha de S.Paulo',
+        title: 'Falta de luz afeta comércio e moradores',
+        description: 'Comerciantes contabilizam prejuízos com a falta de energia elétrica nesta tarde.',
+        imageUrl: 'https://picsum.photos/seed/dark/300/200',
+        url: 'https://folha.uol.com.br',
+        time: '35 min atrás'
+      }
+    ]
   },
-  { id: 'INC-003', lat: 52.355, lng: 4.890, type: 'pothole', severity: 'medium', status: 'investigating', title: 'Perigo na Estrada', description: 'Buraco profundo causando danos aos pneus.', time: '2h atrás', radius: 50, timestamp: Date.now() - 2 * 60 * 60 * 1000 },
-  { id: 'INC-004', lat: 52.365, lng: 4.870, type: 'weather', severity: 'high', status: 'active', title: 'Inundação Urbana', description: 'Inundação na rua devido à chuva forte.', time: '5m atrás', radius: 800, timestamp: Date.now() - 5 * 60 * 1000 },
-  { id: 'INC-005', lat: 52.350, lng: 4.880, type: 'accident', severity: 'low', status: 'cleared', title: 'Acidente Leve', description: 'Colisão traseira, liberada para o acostamento.', time: '3h atrás', radius: 100, timestamp: Date.now() - 3 * 60 * 60 * 1000 },
+  { id: 'INC-003', lat: 52.355, lng: 4.890, type: 'pothole', severity: 'medium', status: 'investigating', title: 'Perigo na Estrada', description: 'Buraco profundo causando danos aos pneus.', address: 'Rua da Consolação, 2300 - Cerqueira César, São Paulo - SP', time: '2h atrás', radius: 50, timestamp: Date.now() - 2 * 60 * 60 * 1000 },
+  { id: 'INC-004', lat: 52.365, lng: 4.870, type: 'weather', severity: 'high', status: 'active', title: 'Inundação Urbana', description: 'Inundação na rua devido à chuva forte.', address: 'Av. Rebouças, 1000 - Pinheiros, São Paulo - SP', time: '5m atrás', radius: 800, timestamp: Date.now() - 5 * 60 * 1000 },
+  { id: 'INC-005', lat: 52.350, lng: 4.880, type: 'accident', severity: 'low', status: 'cleared', title: 'Acidente Leve', description: 'Colisão traseira, liberada para o acostamento.', address: 'Av. Brigadeiro Faria Lima, 3000 - Itaim Bibi, São Paulo - SP', time: '3h atrás', radius: 100, timestamp: Date.now() - 3 * 60 * 60 * 1000 },
 ];
 
 export default function App() {
@@ -85,6 +116,8 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isNewEventModalOpen, setIsNewEventModalOpen] = useState(false);
+  const [flyToCoordinates, setFlyToCoordinates] = useState<{ lat: number, lng: number, zoom?: number } | null>(null);
+  const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
 
   // Filter States
   const [severityFilter, setSeverityFilter] = useState<string[]>([]);
@@ -118,6 +151,46 @@ export default function App() {
     setIncidents([newEvent, ...incidents]);
     setIsNewEventModalOpen(false);
     setSelectedStation(newEvent.id); // Select the new event
+  };
+
+  const generateMockEvents = (lat: number, lng: number) => {
+    const types = ['show', 'party', 'noise', 'inauguration', 'other'];
+    const newEvents: Incident[] = Array.from({ length: 5 }).map((_, i) => {
+      const type = types[Math.floor(Math.random() * types.length)];
+      return {
+        id: `LOC-${Date.now()}-${i}`,
+        lat: lat + (Math.random() - 0.5) * 0.03,
+        lng: lng + (Math.random() - 0.5) * 0.03,
+        type,
+        severity: Math.random() > 0.7 ? 'high' : 'medium',
+        status: 'active',
+        title: `Evento Local #${i + 1}`,
+        description: `Evento do tipo ${type} detectado nesta região.`,
+        address: `Rua Exemplo, ${100 + i * 50} - Bairro Local`,
+        time: 'Agora',
+        radius: 100 + Math.random() * 300,
+        timestamp: Date.now()
+      };
+    });
+    setIncidents(prev => [...newEvents, ...prev]);
+  };
+
+  const handleSearch = async (query: string) => {
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        const newLat = parseFloat(lat);
+        const newLng = parseFloat(lon);
+        
+        setFlyToCoordinates({ lat: newLat, lng: newLng, zoom: 13 });
+        generateMockEvents(newLat, newLng);
+      }
+    } catch (error) {
+      console.error("Search failed:", error);
+    }
   };
 
   // Filter Logic
@@ -189,6 +262,8 @@ export default function App() {
             onOpenDetails={() => setShowDetails(true)}
             showDetails={showDetails}
             isDarkMode={isDarkMode}
+            flyToCoordinates={flyToCoordinates}
+            isNewsModalOpen={isNewsModalOpen}
           />
         </div>
         
@@ -206,6 +281,7 @@ export default function App() {
             typeFilter={typeFilter}
             setTypeFilter={setTypeFilter}
             onNewEvent={() => setIsNewEventModalOpen(true)}
+            onSearch={handleSearch}
           />
         </div>
 
@@ -226,7 +302,14 @@ export default function App() {
         {/* News Card */}
         <AnimatePresence>
           {selectedIncident && selectedIncident.news && (
-            <NewsCard news={selectedIncident.news} isDarkMode={isDarkMode} />
+            <NewsCard 
+              news={selectedIncident.news} 
+              incident={selectedIncident}
+              isDarkMode={isDarkMode} 
+              isModalOpen={isNewsModalOpen}
+              onOpenModal={() => setIsNewsModalOpen(true)}
+              onCloseModal={() => setIsNewsModalOpen(false)}
+            />
           )}
         </AnimatePresence>
       </div>

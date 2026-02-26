@@ -14,7 +14,8 @@ export default function TopBar({
   setTimeFilter,
   typeFilter,
   setTypeFilter,
-  onNewEvent
+  onNewEvent,
+  onSearch
 }: { 
   onMenuClick?: () => void, 
   isDarkMode?: boolean, 
@@ -27,9 +28,47 @@ export default function TopBar({
   setTimeFilter?: (hours: number) => void,
   typeFilter?: string[],
   setTypeFilter?: (filters: string[]) => void,
-  onNewEvent?: () => void
+  onNewEvent?: () => void,
+  onSearch?: (query: string) => void
 }) {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && onSearch) {
+      onSearch(searchQuery);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+
+    if (value.length > 2) {
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}&limit=5`);
+        const data = await response.json();
+        setSuggestions(data);
+        setShowSuggestions(true);
+      } catch (error) {
+        console.error("Failed to fetch suggestions:", error);
+      }
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion: any) => {
+    setSearchQuery(suggestion.display_name);
+    setShowSuggestions(false);
+    if (onSearch) {
+      onSearch(suggestion.display_name);
+    }
+  };
 
   const toggleDropdown = (name: string) => {
     setActiveDropdown(activeDropdown === name ? null : name);
@@ -78,6 +117,11 @@ export default function TopBar({
       case 'power': return 'Energia';
       case 'weather': return 'Clima';
       case 'pothole': return 'Buraco';
+      case 'show': return 'Show';
+      case 'party': return 'Festa';
+      case 'noise': return 'Barulho';
+      case 'inauguration': return 'Inauguração';
+      case 'other': return 'Outro';
       default: return type;
     }
   };
@@ -97,11 +141,35 @@ export default function TopBar({
           <input 
             type="text" 
             placeholder="Buscar incidentes, locais..." 
+            value={searchQuery}
+            onChange={handleInputChange}
+            onKeyDown={handleSearch}
             className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-[#2C2C2C] rounded-lg pl-10 pr-16 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-[#666666] focus:outline-none focus:border-blue-500 dark:focus:border-[#444444] w-[320px] transition-colors shadow-sm"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
             <span className="bg-gray-100 dark:bg-[#262626] text-gray-500 dark:text-[#888888] text-[10px] px-1.5 py-0.5 rounded border border-gray-200 dark:border-[#333333]">/</span>
           </div>
+
+          <AnimatePresence>
+            {showSuggestions && suggestions.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute top-full mt-2 left-0 w-full bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
+              >
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md truncate"
+                  >
+                    {suggestion.display_name}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -125,7 +193,7 @@ export default function TopBar({
                 exit={{ opacity: 0, y: 10 }}
                 className="absolute top-full mt-2 left-0 w-48 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
               >
-                {['accident', 'power', 'weather', 'pothole'].map((type) => (
+                {['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'].map((type) => (
                   <button
                     key={type}
                     onClick={() => handleTypeToggle(type)}

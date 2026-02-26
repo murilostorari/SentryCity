@@ -1,4 +1,4 @@
-import { Zap, AlertTriangle, CloudRain, Construction, AlertOctagon } from 'lucide-react';
+import { Zap, AlertTriangle, CloudRain, Construction, AlertOctagon, Music, PartyPopper, Megaphone, Star, HelpCircle } from 'lucide-react';
 
 interface IncidentMarkerProps {
   isSelected: boolean;
@@ -28,6 +28,11 @@ export default function IncidentMarker({ isSelected, type, severity, isDarkMode,
   else if (type === 'power') IconComponent = Zap;
   else if (type === 'weather') IconComponent = CloudRain;
   else if (type === 'pothole') IconComponent = Construction;
+  else if (type === 'show') IconComponent = Music;
+  else if (type === 'party') IconComponent = PartyPopper;
+  else if (type === 'noise') IconComponent = Megaphone;
+  else if (type === 'inauguration') IconComponent = Star;
+  else if (type === 'other') IconComponent = HelpCircle;
 
   return (
     <div 
