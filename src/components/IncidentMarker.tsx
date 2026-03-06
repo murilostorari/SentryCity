@@ -1,21 +1,24 @@
 import { Zap, AlertTriangle, CloudRain, Construction, AlertOctagon, Music, PartyPopper, Megaphone, Star, HelpCircle } from 'lucide-react';
+import { Colors } from '../constants/Colors';
 
 interface IncidentMarkerProps {
   isSelected: boolean;
   type: string;
-  severity: string; // Changed from status to severity for color coding
+  severity: string;
   isDarkMode: boolean;
   onClick?: () => void;
 }
 
 export default function IncidentMarker({ isSelected, type, severity, isDarkMode, onClick }: IncidentMarkerProps) {
-  let color = isDarkMode ? '#3B82F6' : '#3B82F6'; // Default blue
+  let color = Colors.Status.Medium; // Default blue
   
-  if (severity === 'critical') color = '#EF4444'; // Red
-  if (severity === 'high') color = '#F97316'; // Orange
-  if (severity === 'medium') color = '#F59E0B'; // Amber
-  if (severity === 'low') color = '#10B981'; // Green
-  if (severity === 'none') color = '#6B7280'; // Gray
+  if (severity === 'critical') color = Colors.Status.Critical;
+  if (severity === 'high') color = Colors.Status.High;
+  if (severity === 'medium') color = Colors.Status.High; // Wait, amber is High in Colors, but Medium in logic?
+  // Let's align with Colors.ts
+  if (severity === 'medium') color = Colors.Status.High; // Colors.Status.High is amber-500 (#F59E0B) which matches previous medium color
+  if (severity === 'low') color = Colors.Status.Low;
+  if (severity === 'none') color = Colors.IncidentType.Other;
 
   const fillColor = isSelected ? color : (isDarkMode ? '#1A1A1A' : '#FFFFFF');
   const strokeColor = isSelected ? '#FFFFFF' : color;

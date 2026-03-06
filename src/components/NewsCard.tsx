@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { ExternalLink, Clock, Plus } from 'lucide-react';
 import NewsModal from './NewsModal';
-import { Incident } from '../App';
+import { Incident } from '../types/Incident';
 
 interface NewsItem {
   source: string;

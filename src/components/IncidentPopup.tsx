@@ -1,5 +1,5 @@
 import { Zap, AlertTriangle, CloudRain, Construction, ArrowRight, X, AlertOctagon, Music, PartyPopper, Megaphone, Star, HelpCircle } from 'lucide-react';
-import { Incident } from '../App';
+import { Incident } from '../types/Incident';
 
 interface IncidentPopupProps {
   incident: Incident;

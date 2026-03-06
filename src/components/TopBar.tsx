@@ -1,6 +1,7 @@
 import { useState, useRef, ChangeEvent, KeyboardEvent } from 'react';
 import { Search, Check, BarChart, Calendar, Train, Target, RotateCw, Moon, Sun, Menu, Filter, Bell, ChevronDown, Clock, AlertTriangle, Activity, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { FilterDropdown, DropdownItem } from './FilterDropdown';
 
 export default function TopBar({ 
   onMenuClick, 
@@ -40,13 +41,11 @@ export default function TopBar({
 
   const handleSearch = async (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && onSearch) {
-      // Cancel any pending suggestion fetch
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
       if (abortController.current) abortController.current.abort();
 
       if (searchQuery.length > 2) {
         try {
-          // Use Photon API for direct search as well
           const response = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=1`);
           const data = await response.json();
           
@@ -81,7 +80,6 @@ export default function TopBar({
       clearTimeout(searchTimeout.current);
     }
 
-    // Cancel any ongoing request to prevent race conditions
     if (abortController.current) {
       abortController.current.abort();
       abortController.current = null;
@@ -93,11 +91,9 @@ export default function TopBar({
         abortController.current = controller;
 
         try {
-          // Use Nominatim API which is better for street level search
           const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}&addressdetails=1&limit=5&countrycodes=br`);
           const data = await response.json();
           
-          // Transform Nominatim data to our suggestion format
           const suggestions = data.map((feature: any) => {
             const isStreet = feature.class === 'highway' || feature.type === 'residential' || feature.type === 'secondary' || feature.type === 'tertiary';
             return {
@@ -113,7 +109,6 @@ export default function TopBar({
         } catch (error: any) {
           if (error.name === 'AbortError') return;
           
-          // Fallback suggestions for demo purposes if API fails
           setSuggestions([
             { display_name: 'Av. Paulista, São Paulo, Brasil', lat: -23.5614, lng: -46.6565, zoom: 16 },
             { display_name: 'Av. Copacabana, Rio de Janeiro, Brasil', lat: -22.9694, lng: -43.1868, zoom: 16 },
@@ -121,7 +116,7 @@ export default function TopBar({
           ]);
           setShowSuggestions(true);
         }
-      }, 1000); // Increased debounce to 1 second as requested
+      }, 1000);
     } else {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -217,6 +212,9 @@ export default function TopBar({
     }
   };
 
+  const allTypes = ['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'];
+  const allSeverities = ['critical', 'high', 'medium', 'low'];
+
   return (
     <div className="flex items-center justify-between p-4 md:p-6 pointer-events-auto bg-transparent">
       <div className="flex items-center gap-4">
@@ -266,158 +264,103 @@ export default function TopBar({
 
       <div className="flex items-center gap-3">
         {/* Type Filter */}
-        <div className="relative">
-          <button 
-            onClick={() => toggleDropdown('type')}
-            className={`hidden md:flex items-center gap-2 bg-white dark:bg-[#1E1E1E] border ${typeFilter?.length ? 'border-blue-500 dark:border-blue-500' : 'border-gray-200 dark:border-[#2C2C2C]'} rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-[#262626] transition-colors shadow-sm`}
+        <div className="hidden md:block">
+          <FilterDropdown
+            label="Tipo"
+            icon={<Tag size={16} className="text-gray-500 dark:text-[#888888]" />}
+            active={activeDropdown === 'type'}
+            onToggle={() => toggleDropdown('type')}
+            className={typeFilter?.length ? 'border-blue-500' : ''}
           >
-            <Tag size={16} className="text-gray-500 dark:text-[#888888]" />
-            <span className="font-medium">Tipo</span>
-            <ChevronDown size={14} className={`transition-transform ${activeDropdown === 'type' ? 'rotate-180' : ''}`} />
-          </button>
-          
-          <AnimatePresence>
-            {activeDropdown === 'type' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full mt-2 left-0 w-48 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
-              >
-                <button
-                  onClick={handleSelectAllTypes}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md font-semibold border-b border-gray-100 dark:border-[#333] mb-1"
-                >
-                  <span>Selecionar Todos</span>
-                  {typeFilter?.length === ['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'].length && <Check size={14} className="text-blue-500" />}
-                </button>
-                {['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'].map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => handleTypeToggle(type)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md capitalize"
-                  >
-                    <span>{translateType(type)}</span>
-                    {typeFilter?.includes(type) && <Check size={14} className="text-blue-500" />}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+            <DropdownItem
+              label="Selecionar Todos"
+              onClick={handleSelectAllTypes}
+              selected={typeFilter?.length === allTypes.length}
+              className="font-semibold border-b border-gray-100 dark:border-[#333] mb-1"
+            />
+            {allTypes.map((type) => (
+              <DropdownItem
+                key={type}
+                label={translateType(type)}
+                onClick={() => handleTypeToggle(type)}
+                selected={typeFilter?.includes(type)}
+              />
+            ))}
+          </FilterDropdown>
         </div>
 
         {/* Severity Filter */}
-        <div className="relative">
-          <button 
-            onClick={() => toggleDropdown('severity')}
-            className={`hidden md:flex items-center gap-2 bg-white dark:bg-[#1E1E1E] border ${severityFilter?.length ? 'border-red-500 dark:border-red-500' : 'border-gray-200 dark:border-[#2C2C2C]'} rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-[#262626] transition-colors shadow-sm`}
+        <div className="hidden md:block">
+          <FilterDropdown
+            label="Severidade"
+            icon={
+              <div className="w-4 h-4 rounded bg-red-500 dark:bg-[#EF4444] flex items-center justify-center">
+                <AlertTriangle size={10} className="text-white" />
+              </div>
+            }
+            active={activeDropdown === 'severity'}
+            onToggle={() => toggleDropdown('severity')}
+            className={severityFilter?.length ? 'border-red-500' : ''}
           >
-            <div className="w-4 h-4 rounded bg-red-500 dark:bg-[#EF4444] flex items-center justify-center">
-              <AlertTriangle size={10} className="text-white" />
-            </div>
-            <span className="font-medium">Severidade</span>
-            <ChevronDown size={14} className={`transition-transform ${activeDropdown === 'severity' ? 'rotate-180' : ''}`} />
-          </button>
-          
-          <AnimatePresence>
-            {activeDropdown === 'severity' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full mt-2 left-0 w-48 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
-              >
-                <button
-                  onClick={handleSelectAllSeverity}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md font-semibold border-b border-gray-100 dark:border-[#333] mb-1"
-                >
-                  <span>Selecionar Todos</span>
-                  {severityFilter?.length === 4 && <Check size={14} className="text-blue-500" />}
-                </button>
-                {['critical', 'high', 'medium', 'low'].map((sev) => (
-                  <button
-                    key={sev}
-                    onClick={() => handleSeverityToggle(sev)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md capitalize"
-                  >
-                    <span>{translateSeverity(sev)}</span>
-                    {severityFilter?.includes(sev) && <Check size={14} className="text-blue-500" />}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+            <DropdownItem
+              label="Selecionar Todos"
+              onClick={handleSelectAllSeverity}
+              selected={severityFilter?.length === allSeverities.length}
+              className="font-semibold border-b border-gray-100 dark:border-[#333] mb-1"
+            />
+            {allSeverities.map((sev) => (
+              <DropdownItem
+                key={sev}
+                label={translateSeverity(sev)}
+                onClick={() => handleSeverityToggle(sev)}
+                selected={severityFilter?.includes(sev)}
+              />
+            ))}
+          </FilterDropdown>
         </div>
 
         {/* Time Filter */}
-        <div className="relative">
-          <button 
-            onClick={() => toggleDropdown('time')}
-            className="hidden lg:flex items-center gap-2 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-[#262626] transition-colors shadow-sm"
+        <div className="hidden lg:block">
+          <FilterDropdown
+            label={timeFilter === 24 ? '24h' : `${timeFilter}h`}
+            icon={<Clock size={16} className="text-gray-500 dark:text-[#888888]" />}
+            active={activeDropdown === 'time'}
+            onToggle={() => toggleDropdown('time')}
           >
-            <Clock size={16} className="text-gray-500 dark:text-[#888888]" />
-            <span>{timeFilter === 24 ? '24h' : `${timeFilter}h`}</span>
-          </button>
-
-          <AnimatePresence>
-            {activeDropdown === 'time' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full mt-2 left-0 w-32 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
-              >
-                {[1, 6, 12, 24, 48].map((hours) => (
-                  <button
-                    key={hours}
-                    onClick={() => {
-                      setTimeFilter?.(hours);
-                      setActiveDropdown(null);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md ${timeFilter === hours ? 'text-blue-500 font-medium' : 'text-gray-700 dark:text-gray-200'}`}
-                  >
-                    Últimas {hours}h
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+            {[1, 6, 12, 24, 48].map((hours) => (
+              <DropdownItem
+                key={hours}
+                label={`Últimas ${hours}h`}
+                onClick={() => {
+                  setTimeFilter?.(hours);
+                  setActiveDropdown(null);
+                }}
+                selected={timeFilter === hours}
+              />
+            ))}
+          </FilterDropdown>
         </div>
 
-        {/* Status Filter Dropdown */}
-        <div className="relative">
-          <button 
-            onClick={() => toggleDropdown('status')}
-            className="hidden lg:flex items-center gap-2 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-[#262626] transition-colors shadow-sm"
+        {/* Status Filter */}
+        <div className="hidden lg:block">
+          <FilterDropdown
+            label={translateStatus(statusFilter || 'all')}
+            icon={<Activity size={16} className="text-gray-500 dark:text-[#888888]" />}
+            active={activeDropdown === 'status'}
+            onToggle={() => toggleDropdown('status')}
           >
-            <Activity size={16} className="text-gray-500 dark:text-[#888888]" />
-            <span>{translateStatus(statusFilter || 'all')}</span>
-            <ChevronDown size={14} className={`transition-transform ${activeDropdown === 'status' ? 'rotate-180' : ''}`} />
-          </button>
-
-          <AnimatePresence>
-            {activeDropdown === 'status' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full mt-2 left-0 w-32 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
-              >
-                {['all', 'active', 'resolved'].map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => {
-                      setStatusFilter?.(status);
-                      setActiveDropdown(null);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md ${statusFilter === status ? 'text-blue-500 font-medium' : 'text-gray-700 dark:text-gray-200'}`}
-                  >
-                    {translateStatus(status)}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+            {['all', 'active', 'resolved'].map((status) => (
+              <DropdownItem
+                key={status}
+                label={translateStatus(status)}
+                onClick={() => {
+                  setStatusFilter?.(status);
+                  setActiveDropdown(null);
+                }}
+                selected={statusFilter === status}
+              />
+            ))}
+          </FilterDropdown>
         </div>
 
         <button 

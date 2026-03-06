@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Activity, ChevronLeft, ChevronRight, X, AlertTriangle, Bell } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Incident } from '../App';
+import { Incident } from '../types/Incident';
 
 interface SidebarProps {
   onClose?: () => void;

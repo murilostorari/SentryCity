@@ -4,7 +4,7 @@ import Map, { Marker, Popup, Source, Layer, MapRef } from 'react-map-gl/maplibre
 import type { FillLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { motion, AnimatePresence } from 'motion/react';
-import { Incident } from '../App';
+import { Incident } from '../types/Incident';
 import IncidentMarker from './IncidentMarker';
 import IncidentPopup from './IncidentPopup';
 import OffScreenIndicator from './OffScreenIndicator';

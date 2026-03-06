@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users } from 'lucide-react';
 import { BarChart, Bar, ResponsiveContainer, AreaChart, Area, CartesianGrid, YAxis } from 'recharts';
-import { Incident } from '../App';
+import { Incident } from '../types/Incident';
 
 const timelineData = Array.from({ length: 24 }).map((_, i) => ({
   time: `${i}:00`,
