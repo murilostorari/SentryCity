@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { X, ArrowUp, AlertTriangle, Zap, CloudRain, Construction, Music, PartyPopper, Megaphone, Star, HelpCircle } from 'lucide-react';
-import { Incident } from '../App';
+import { Incident } from '../types/Incident';
 
 interface OffScreenIndicatorProps {
   incident: Incident;

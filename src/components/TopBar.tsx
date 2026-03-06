@@ -30,7 +30,7 @@ export default function TopBar({
   typeFilter?: string[],
   setTypeFilter?: (filters: string[]) => void,
   onNewEvent?: () => void,
-  onSearch?: (query: string | { lat: number, lng: number, label?: string }) => void
+  onSearch?: (query: string | { lat: number, lng: number, label?: string, zoom?: number }) => void
 }) {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');

@@ -190,12 +190,15 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
     <ResponsiveModal isOpen={true} onClose={onClose} className="max-w-md" isDarkMode={isDarkMode}>
       <div className={`flex items-center justify-between p-4 border-b shrink-0 ${isDarkMode ? 'border-[#333]' : 'border-gray-200'}`}>
         <h2 className="text-lg font-semibold">Novo Evento</h2>
-        <button onClick={onClose} className={`hidden md:flex p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-[#333] transition-colors`}>
-          <X size={20} />
+        <button 
+          onClick={onClose} 
+          className={`hidden md:flex w-8 h-8 rounded-full items-center justify-center transition-colors ${isDarkMode ? 'bg-[#2A2A2A] text-[#888888] hover:text-white hover:bg-[#333333]' : 'bg-gray-100 text-gray-500 hover:text-black hover:bg-gray-200'}`}
+        >
+          <X size={16} />
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto flex-1 custom-scrollbar" ref={dropdownRef}>
+      <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto flex-1 no-scrollbar" ref={dropdownRef}>
         <div>
           <label className="block text-sm font-medium mb-1 opacity-70">Título</label>
           <input 
@@ -237,7 +240,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto custom-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                  className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
                 >
                   {streetSuggestions.map((suggestion, index) => (
                     <button
@@ -270,7 +273,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto custom-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                  className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
                 >
                   {citySuggestions.map((suggestion, index) => (
                     <button
@@ -307,7 +310,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className={`absolute top-full mt-2 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto custom-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                  className={`absolute top-full mt-2 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
                 >
                   {['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'].map((t) => (
                     <button

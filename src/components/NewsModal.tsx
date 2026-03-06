@@ -119,7 +119,7 @@ export default function NewsModal({ news, incident, onClose, isDarkMode }: NewsM
       </div>
 
       {/* News List */}
-      <div className="overflow-y-auto p-4 space-y-3 flex-1 custom-scrollbar">
+      <div className="overflow-y-auto p-4 space-y-3 flex-1 no-scrollbar">
         <h3 className="text-sm font-semibold opacity-70 mb-2 px-1">Fontes Relacionadas ({news.length})</h3>
         {news.map((item, index) => (
           <div 

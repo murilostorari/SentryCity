@@ -1,3 +1,4 @@
+import React from 'react';
 import { X, Bell, ArrowUpRight, Clock, AlertTriangle, Zap, CloudRain, Construction, Music, PartyPopper, Megaphone, Star, HelpCircle } from 'lucide-react';
 import { Incident } from '../types/Incident';
 import ResponsiveModal from './ResponsiveModal';
@@ -20,13 +21,13 @@ export default function RecentAlertsModal({ isOpen, onClose, incidents, isDarkMo
         </div>
         <button 
           onClick={onClose}
-          className={`hidden md:flex p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-[#333] transition-colors`}
+          className={`hidden md:flex w-8 h-8 rounded-full items-center justify-center transition-colors ${isDarkMode ? 'bg-[#2A2A2A] text-[#888888] hover:text-white hover:bg-[#333333]' : 'bg-gray-100 text-gray-500 hover:text-black hover:bg-gray-200'}`}
         >
-          <X size={20} />
+          <X size={16} />
         </button>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
         {incidents.length > 0 ? (
           incidents.map((incident) => (
             <PinnedItem 
@@ -49,7 +50,13 @@ export default function RecentAlertsModal({ isOpen, onClose, incidents, isDarkMo
   );
 }
 
-function PinnedItem({ incident, onClick }: { incident: Incident, onClick: () => void }) {
+interface PinnedItemProps {
+  incident: Incident;
+  onClick: () => void;
+  key?: React.Key;
+}
+
+function PinnedItem({ incident, onClick }: PinnedItemProps) {
   const getIcon = () => {
     switch(incident.type) {
       case 'accident': return <AlertTriangle size={16} className="text-white" />;

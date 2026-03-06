@@ -68,7 +68,7 @@ export default function StationDetails({ incident, onClose }: { incident: Incide
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto p-5 no-scrollbar">
         {activeTab === 'Detalhes' && <DetailsTab incident={incident} translateSeverity={translateSeverity} />}
         {activeTab === 'Linha do Tempo' && <TimelineTab />}
       </div>

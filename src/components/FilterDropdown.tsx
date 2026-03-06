@@ -1,6 +1,6 @@
 import { ChevronDown, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 
 interface FilterDropdownProps {
   label: string;
@@ -31,7 +31,7 @@ export function FilterDropdown({ label, icon, active, onToggle, children, badge,
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute top-full mt-2 left-0 min-w-[12rem] bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
+            className="absolute top-full mt-2 left-0 min-w-[12rem] bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50 max-h-64 overflow-y-auto no-scrollbar"
           >
             {children}
           </motion.div>
@@ -47,6 +47,7 @@ interface DropdownItemProps {
   selected?: boolean;
   icon?: ReactNode;
   className?: string;
+  key?: React.Key;
 }
 
 export function DropdownItem({ label, onClick, selected, icon, className }: DropdownItemProps) {

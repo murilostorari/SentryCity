@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Layers, Box, Plus, Minus } from 'lucide-react';
+import { Layers, Box, Plus, Minus, Wind } from 'lucide-react';
 import Map, { Marker, Popup, Source, Layer, MapRef } from 'react-map-gl/maplibre';
+import useSupercluster from 'use-supercluster';
 import type { FillLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,6 +9,7 @@ import { Incident } from '../types/Incident';
 import IncidentMarker from './IncidentMarker';
 import IncidentPopup from './IncidentPopup';
 import OffScreenIndicator from './OffScreenIndicator';
+import { Colors } from '../constants/Colors';
 
 // Carto basemap styles (free to use without API key for dev/demo)
 const DARK_MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -66,27 +68,60 @@ export default function MapArea({
 }) {
   const mapRef = useRef<MapRef>(null);
   const [is3D, setIs3D] = useState(true);
+  const [zoom, setZoom] = useState(13);
+  const [bounds, setBounds] = useState<any>(null);
   
   // Off-screen indicator state
   const [isOffScreen, setIsOffScreen] = useState(false);
   const [bearingToIncident, setBearingToIncident] = useState(0);
 
+  // Convert incidents to GeoJSON for clustering
+  const points: any[] = incidents.map(incident => ({
+    type: "Feature" as const,
+    properties: {
+      cluster: false,
+      incidentId: incident.id,
+      severity: incident.severity,
+      type: incident.type
+    },
+    geometry: {
+      type: "Point" as const,
+      coordinates: [incident.lng, incident.lat]
+    }
+  }));
+
+  // Get clusters
+  const { clusters, supercluster } = useSupercluster({
+    points,
+    bounds,
+    zoom,
+    options: { radius: 75, maxZoom: 20 }
+  });
+
   // Find selected incident object
   const selectedIncidentData = incidents.find(s => s.id === selectedStation);
 
-  // Handle map movement to update off-screen indicator
+  // Handle map movement to update off-screen indicator and bounds/zoom for clustering
   const handleMapMove = () => {
-    if (!mapRef.current || !selectedIncidentData) {
+    if (!mapRef.current) return;
+
+    const map = mapRef.current.getMap();
+    const newZoom = map.getZoom();
+    const newBounds = map.getBounds().toArray().flat();
+    
+    setZoom(newZoom);
+    setBounds(newBounds);
+
+    if (!selectedIncidentData) {
       setIsOffScreen(false);
       return;
     }
 
-    const map = mapRef.current.getMap();
-    const bounds = map.getBounds();
+    const boundsObj = map.getBounds();
     const incidentLngLat = { lng: selectedIncidentData.lng, lat: selectedIncidentData.lat };
 
     // Check if incident is in view
-    const inView = bounds.contains(incidentLngLat);
+    const inView = boundsObj.contains(incidentLngLat);
     setIsOffScreen(!inView);
 
     if (!inView) {
@@ -95,16 +130,7 @@ export default function MapArea({
       const centerPixel = map.project(center);
       const targetPixel = map.project(incidentLngLat);
       
-      // Calculate angle in radians
       const angleRad = Math.atan2(targetPixel.y - centerPixel.y, targetPixel.x - centerPixel.x);
-      
-      // Convert to degrees and adjust for arrow pointing up (add 90 degrees)
-      // atan2 returns angle from X axis (Right). ArrowUp points Up (-Y).
-      // So 0 deg (Right) should rotate arrow 90 deg.
-      // Wait, let's simplify:
-      // If target is to the Right (0 deg), arrow should point Right (90 deg rotation).
-      // If target is Up (-90 deg), arrow should point Up (0 deg rotation).
-      // Formula: (angleRad * 180 / Math.PI) + 90
       const angleDeg = (angleRad * 180 / Math.PI) + 90;
       setBearingToIncident(angleDeg);
     }
@@ -114,6 +140,13 @@ export default function MapArea({
   useEffect(() => {
     handleMapMove();
   }, [selectedStation, selectedIncidentData]);
+
+  // Initial bounds set
+  useEffect(() => {
+    if (mapRef.current) {
+      handleMapMove();
+    }
+  }, []);
 
   // Handle FlyTo
   useEffect(() => {
@@ -311,27 +344,94 @@ export default function MapArea({
           </Source>
         )}
 
-        {/* Incident Markers */}
-        {incidents.map((incident) => (
-          <Marker
-            key={incident.id}
-            longitude={incident.lng}
-            latitude={incident.lat}
-            anchor="center"
-            onClick={(e) => {
-              e.originalEvent.stopPropagation();
-              onSelectStation(incident.id);
-            }}
-            style={{ cursor: 'pointer', zIndex: selectedStation === incident.id ? 50 : 1 }}
-          >
-            <IncidentMarker 
-              isSelected={selectedStation === incident.id} 
-              type={incident.type} 
-              severity={incident.severity}
-              isDarkMode={isDarkMode} 
-            />
-          </Marker>
-        ))}
+        {/* Incident Markers & Clusters */}
+        {clusters.map((cluster) => {
+          const [longitude, latitude] = cluster.geometry.coordinates;
+          const props = cluster.properties as any;
+          const isCluster = props.cluster;
+
+          if (isCluster) {
+            const pointCount = props.point_count || 0;
+            // Get all leaves in this cluster to determine the most severe color
+            const leaves = supercluster?.getLeaves(cluster.id as number, Infinity) || [];
+            let maxSeverity = 'low';
+            const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, none: 0 };
+            
+            leaves.forEach(leaf => {
+              const leafSeverity = leaf.properties.severity as keyof typeof severityOrder;
+              if (severityOrder[leafSeverity] > severityOrder[maxSeverity as keyof typeof severityOrder]) {
+                maxSeverity = leafSeverity;
+              }
+            });
+
+            let clusterColor = Colors.Status.Low;
+            if (maxSeverity === 'critical') clusterColor = Colors.Status.Critical;
+            else if (maxSeverity === 'high') clusterColor = Colors.Status.High;
+            else if (maxSeverity === 'medium') clusterColor = Colors.Status.High;
+
+            return (
+              <Marker
+                key={`cluster-${cluster.id}`}
+                longitude={longitude}
+                latitude={latitude}
+                onClick={(e) => {
+                  e.originalEvent.stopPropagation();
+                  const expansionZoom = Math.min(
+                    supercluster?.getClusterExpansionZoom(cluster.id as number) || zoom + 2,
+                    20
+                  );
+                  mapRef.current?.flyTo({
+                    center: [longitude, latitude],
+                    zoom: expansionZoom,
+                    duration: 1000
+                  });
+                }}
+              >
+                <div 
+                  className="relative flex items-center justify-center cursor-pointer group"
+                  style={{ width: '40px', height: '40px' }}
+                >
+                  <div 
+                    className="absolute inset-0 rounded-full border-2 border-white shadow-lg transition-transform group-hover:scale-110"
+                    style={{ backgroundColor: clusterColor }}
+                  />
+                  <div className="relative z-10 flex flex-col items-center justify-center text-white">
+                    <Wind size={14} />
+                    <span className="text-[10px] font-bold leading-none">{pointCount}</span>
+                  </div>
+                </div>
+              </Marker>
+            );
+          }
+
+          // Individual Marker
+          return (
+            <Marker
+              key={props.incidentId}
+              longitude={longitude}
+              latitude={latitude}
+              anchor="center"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                onSelectStation(props.incidentId);
+                // Zoom into the incident on click
+                mapRef.current?.flyTo({
+                  center: [longitude, latitude],
+                  zoom: 16,
+                  duration: 1000
+                });
+              }}
+              style={{ cursor: 'pointer', zIndex: selectedStation === props.incidentId ? 50 : 1 }}
+            >
+              <IncidentMarker 
+                isSelected={selectedStation === props.incidentId} 
+                type={props.type} 
+                severity={props.severity}
+                isDarkMode={isDarkMode} 
+              />
+            </Marker>
+          );
+        })}
 
         {/* Popup with AnimatePresence for exit animations */}
         <AnimatePresence mode="wait">
