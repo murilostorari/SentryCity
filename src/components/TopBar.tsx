@@ -93,19 +93,17 @@ export default function TopBar({
         abortController.current = controller;
 
         try {
-          // Use Photon API (based on OSM) which is more reliable for client-side requests
-          const response = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(value)}&limit=5`, {
-            signal: controller.signal
-          });
+          // Use Nominatim API which is better for street level search
+          const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}&addressdetails=1&limit=5&countrycodes=br`);
           const data = await response.json();
           
-          // Transform Photon GeoJSON to our suggestion format
-          const suggestions = data.features.map((feature: any) => {
-            const isStreet = feature.properties.osm_key === 'highway' || feature.properties.osm_key === 'building' || feature.properties.type === 'house';
+          // Transform Nominatim data to our suggestion format
+          const suggestions = data.map((feature: any) => {
+            const isStreet = feature.class === 'highway' || feature.type === 'residential' || feature.type === 'secondary' || feature.type === 'tertiary';
             return {
-              display_name: [feature.properties.name, feature.properties.city, feature.properties.country].filter(Boolean).join(', '),
-              lat: feature.geometry.coordinates[1],
-              lng: feature.geometry.coordinates[0],
+              display_name: feature.display_name,
+              lat: feature.lat,
+              lng: feature.lon,
               zoom: isStreet ? 17 : 13
             };
           });
@@ -115,14 +113,11 @@ export default function TopBar({
         } catch (error: any) {
           if (error.name === 'AbortError') return;
           
-          // Suppress error log for user and use fallback silently
-          // console.error("Failed to fetch suggestions:", error);
-          
           // Fallback suggestions for demo purposes if API fails
           setSuggestions([
-            { display_name: 'São Paulo, Brasil', lat: -23.5505, lng: -46.6333, zoom: 12 },
-            { display_name: 'Rio de Janeiro, Brasil', lat: -22.9068, lng: -43.1729, zoom: 12 },
-            { display_name: 'Brasília, Brasil', lat: -15.7801, lng: -47.9292, zoom: 12 }
+            { display_name: 'Av. Paulista, São Paulo, Brasil', lat: -23.5614, lng: -46.6565, zoom: 16 },
+            { display_name: 'Av. Copacabana, Rio de Janeiro, Brasil', lat: -22.9694, lng: -43.1868, zoom: 16 },
+            { display_name: 'Esplanada dos Ministérios, Brasília, Brasil', lat: -15.7975, lng: -47.8618, zoom: 15 }
           ]);
           setShowSuggestions(true);
         }
@@ -159,12 +154,32 @@ export default function TopBar({
     }
   };
 
+  const handleSelectAllSeverity = () => {
+    if (!setSeverityFilter) return;
+    const allSeverities = ['critical', 'high', 'medium', 'low'];
+    if (severityFilter?.length === allSeverities.length) {
+      setSeverityFilter([]);
+    } else {
+      setSeverityFilter(allSeverities);
+    }
+  };
+
   const handleTypeToggle = (type: string) => {
     if (!typeFilter || !setTypeFilter) return;
     if (typeFilter.includes(type)) {
       setTypeFilter(typeFilter.filter(t => t !== type));
     } else {
       setTypeFilter([...typeFilter, type]);
+    }
+  };
+
+  const handleSelectAllTypes = () => {
+    if (!setTypeFilter) return;
+    const allTypes = ['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'];
+    if (typeFilter?.length === allTypes.length) {
+      setTypeFilter([]);
+    } else {
+      setTypeFilter(allTypes);
     }
   };
 
@@ -269,6 +284,13 @@ export default function TopBar({
                 exit={{ opacity: 0, y: 10 }}
                 className="absolute top-full mt-2 left-0 w-48 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
               >
+                <button
+                  onClick={handleSelectAllTypes}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md font-semibold border-b border-gray-100 dark:border-[#333] mb-1"
+                >
+                  <span>Selecionar Todos</span>
+                  {typeFilter?.length === ['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'].length && <Check size={14} className="text-blue-500" />}
+                </button>
                 {['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'].map((type) => (
                   <button
                     key={type}
@@ -305,6 +327,13 @@ export default function TopBar({
                 exit={{ opacity: 0, y: 10 }}
                 className="absolute top-full mt-2 left-0 w-48 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
               >
+                <button
+                  onClick={handleSelectAllSeverity}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md font-semibold border-b border-gray-100 dark:border-[#333] mb-1"
+                >
+                  <span>Selecionar Todos</span>
+                  {severityFilter?.length === 4 && <Check size={14} className="text-blue-500" />}
+                </button>
                 {['critical', 'high', 'medium', 'low'].map((sev) => (
                   <button
                     key={sev}

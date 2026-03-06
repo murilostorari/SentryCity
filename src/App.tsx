@@ -6,6 +6,7 @@ import MapArea from './components/MapArea';
 import StationDetails from './components/StationDetails';
 import NewEventModal from './components/NewEventModal';
 import NewsCard from './components/NewsCard';
+import RecentAlertsModal from './components/RecentAlertsModal';
 
 export interface Incident {
   id: string;
@@ -86,6 +87,7 @@ export default function App() {
   const [flyToCoordinates, setFlyToCoordinates] = useState<{ lat: number, lng: number, zoom?: number } | null>(null);
   const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
   const [currentCity, setCurrentCity] = useState('Adamantina, SP');
+  const [isRecentAlertsModalOpen, setIsRecentAlertsModalOpen] = useState(false);
 
   // Filter States
   const [severityFilter, setSeverityFilter] = useState<string[]>([]);
@@ -156,19 +158,23 @@ export default function App() {
     }
 
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      // Use Nominatim with address details to better detect streets
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=1&countrycodes=br`);
       const data = await response.json();
       
       if (data && data.length > 0) {
-        const { lat, lon, display_name } = data[0];
+        const { lat, lon, display_name, class: osmClass, type: osmType } = data[0];
         const newLat = parseFloat(lat);
         const newLng = parseFloat(lon);
         
         const parts = display_name.split(',');
         setCurrentCity(parts[0]);
 
-        // Determine zoom based on type if possible, otherwise default to 16 for direct searches
-        setFlyToCoordinates({ lat: newLat, lng: newLng, zoom: 16 });
+        // Determine zoom based on type - streets get closer zoom
+        const isStreet = osmClass === 'highway' || osmType === 'residential' || osmType === 'secondary' || osmType === 'tertiary' || osmType === 'road';
+        const zoom = isStreet ? 17 : 13;
+
+        setFlyToCoordinates({ lat: newLat, lng: newLng, zoom });
         generateMockEvents(newLat, newLng);
       }
     } catch (error) {
@@ -231,12 +237,20 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Recent Alerts Modal */}
+      <RecentAlertsModal 
+        isOpen={isRecentAlertsModalOpen}
+        onClose={() => setIsRecentAlertsModalOpen(false)}
+        incidents={incidents}
+      />
+
       {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <Sidebar 
           onClose={() => setIsSidebarOpen(false)} 
           currentCity={currentCity}
           incidents={incidents}
+          onOpenRecentAlerts={() => setIsRecentAlertsModalOpen(true)}
         />
       </div>
 
