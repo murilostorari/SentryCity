@@ -1,30 +1,40 @@
 import { useState } from 'react';
-import { Flame, Zap, LayoutDashboard, Grid, Shield, MapPin, BarChart2, ChevronUp, Sidebar as SidebarIcon, X, AlertTriangle, Radio, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight, X, AlertTriangle, Zap, CloudRain, Construction, Music, PartyPopper, Megaphone, Star, HelpCircle, ArrowUpRight } from 'lucide-react';
 import { motion } from 'motion/react';
+import { Incident } from '../App';
 
-export default function Sidebar({ onClose }: { onClose?: () => void }) {
+interface SidebarProps {
+  onClose?: () => void;
+  currentCity?: string;
+  incidents?: Incident[];
+}
+
+export default function Sidebar({ onClose, currentCity = "Adamantina, SP", incidents = [] }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
     <motion.div 
-      animate={{ width: isCollapsed ? 80 : 280 }}
+      animate={{ width: isCollapsed ? 80 : 320 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className="bg-white dark:bg-[#161616] border-r border-gray-200 dark:border-[#2C2C2C] flex flex-col h-full z-10 shrink-0 transition-colors duration-300 relative"
     >
       <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-black dark:bg-white rounded-lg flex items-center justify-center text-white dark:text-black font-bold shrink-0">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <div className="w-10 h-10 bg-black dark:bg-white rounded-xl flex items-center justify-center text-white dark:text-black font-bold shrink-0 shadow-sm">
             <Activity size={20} />
           </div>
           {!isCollapsed && (
-            <motion.span 
+            <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="text-xl font-bold tracking-wide text-gray-900 dark:text-white whitespace-nowrap"
+              className="flex flex-col"
             >
-              SentryCity
-            </motion.span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Localização Atual</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-white truncate max-w-[180px]" title={currentCity}>
+                {currentCity}
+              </span>
+            </motion.div>
           )}
         </div>
         {!isCollapsed && (
@@ -45,35 +55,31 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
-      <div className="flex-1 overflow-y-auto py-2 overflow-x-hidden">
+      <div className="flex-1 overflow-y-auto py-2 overflow-x-hidden custom-scrollbar">
         <div className="px-4 space-y-1">
-          <NavItem icon={<AlertTriangle size={18} />} label="Incidentes Ativos" badge="5" badgeColor="bg-red-100 dark:bg-[#3A1D1D] text-red-600 dark:text-[#E54D4D]" active isCollapsed={isCollapsed} />
-          <NavItem icon={<Radio size={18} />} label="Transmissão Ao Vivo" badge="((•))" badgeColor="bg-green-100 dark:bg-[#064E3B] text-green-600 dark:text-[#10B981]" isCollapsed={isCollapsed} />
-        </div>
-
-        <div className="mt-6 px-4 space-y-1">
-          <NavItem icon={<LayoutDashboard size={18} />} label="Visão Geral" isCollapsed={isCollapsed} />
-          <NavItem icon={<Grid size={18} />} label="Mapas de Calor" isCollapsed={isCollapsed} />
-          <NavItem icon={<Shield size={18} />} label="Recursos" isCollapsed={isCollapsed} />
-          <NavItem icon={<MapPin size={18} />} label="Zonas" isCollapsed={isCollapsed} />
-          <NavItem icon={<BarChart2 size={18} />} label="Análise" isCollapsed={isCollapsed} />
+          <NavItem 
+            icon={<AlertTriangle size={18} />} 
+            label="Incidentes Ativos" 
+            badge={incidents.length.toString()} 
+            badgeColor="bg-red-100 dark:bg-[#3A1D1D] text-red-600 dark:text-[#E54D4D]" 
+            active 
+            isCollapsed={isCollapsed} 
+          />
         </div>
 
         <div className="mt-8 px-4">
           {!isCollapsed && (
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-500 dark:text-[#666666] mb-4 px-2 tracking-wider whitespace-nowrap">
-              <span>ALERTAS RECENTES</span>
-              <ChevronUp size={14} />
+            <div className="flex items-center justify-between text-xs font-bold text-gray-400 dark:text-[#666666] mb-4 px-2 tracking-wider uppercase">
+              <span>Alertas Recentes</span>
             </div>
           )}
-          <div className="space-y-1">
-            <PinnedItem type="ACD" name="Colisão Grave" value="12m" isCollapsed={isCollapsed} />
-            <PinnedItem type="ENR" name="Queda de Energia" value="45m" isCollapsed={isCollapsed} />
-            <PinnedItem type="CLT" name="Inundação Urbana" value="5m" isCollapsed={isCollapsed} />
-            <PinnedItem type="EST" name="Perigo na Estrada" value="2h" isCollapsed={isCollapsed} />
+          <div className="space-y-3">
+            {incidents.slice(0, 6).map((incident) => (
+              <PinnedItem key={incident.id} incident={incident} isCollapsed={isCollapsed} />
+            ))}
           </div>
-          {!isCollapsed && (
-            <button className="text-gray-500 dark:text-[#666666] text-xs px-2 mt-4 hover:text-black dark:hover:text-white transition-colors whitespace-nowrap">
+          {!isCollapsed && incidents.length > 6 && (
+            <button className="text-gray-500 dark:text-[#666666] text-xs px-2 mt-4 hover:text-black dark:hover:text-white transition-colors whitespace-nowrap font-medium">
               Ver todos os alertas
             </button>
           )}
@@ -86,12 +92,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 function NavItem({ icon, label, active, badge, badgeColor, isCollapsed }: any) {
   return (
     <div 
-      className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'justify-between px-3'} py-2.5 rounded-lg cursor-pointer transition-colors ${active ? 'bg-blue-50 dark:bg-[#172554] text-blue-600 dark:text-[#3B82F6]' : 'text-gray-500 dark:text-[#A1A1AA] hover:bg-gray-100 dark:hover:bg-[#1E1E1E] hover:text-black dark:hover:text-white'}`}
+      className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'justify-between px-3'} py-3 rounded-xl cursor-pointer transition-all duration-200 ${active ? 'bg-blue-50 dark:bg-[#172554] text-blue-600 dark:text-[#3B82F6] shadow-sm' : 'text-gray-500 dark:text-[#A1A1AA] hover:bg-gray-100 dark:hover:bg-[#1E1E1E] hover:text-black dark:hover:text-white'}`}
       title={isCollapsed ? label : ''}
     >
       <div className="flex items-center gap-3">
         {icon}
-        {!isCollapsed && <span className="text-sm font-medium whitespace-nowrap">{label}</span>}
+        {!isCollapsed && <span className="text-sm font-semibold whitespace-nowrap">{label}</span>}
       </div>
       {!isCollapsed && badge && (
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}`}>
@@ -102,19 +108,57 @@ function NavItem({ icon, label, active, badge, badgeColor, isCollapsed }: any) {
   );
 }
 
-function PinnedItem({ type, name, value, isCollapsed }: any) {
+function PinnedItem({ incident, isCollapsed }: { incident: Incident, isCollapsed: boolean }) {
+  const getIcon = () => {
+    switch(incident.type) {
+      case 'accident': return <AlertTriangle size={14} className="text-white" />;
+      case 'power': return <Zap size={14} className="text-white" />;
+      case 'weather': return <CloudRain size={14} className="text-white" />;
+      case 'pothole': return <Construction size={14} className="text-white" />;
+      case 'show': return <Music size={14} className="text-white" />;
+      case 'party': return <PartyPopper size={14} className="text-white" />;
+      case 'noise': return <Megaphone size={14} className="text-white" />;
+      case 'inauguration': return <Star size={14} className="text-white" />;
+      default: return <HelpCircle size={14} className="text-white" />;
+    }
+  };
+
+  const getSeverityColor = () => {
+    switch(incident.severity) {
+      case 'critical': return 'bg-red-500';
+      case 'high': return 'bg-orange-500';
+      case 'medium': return 'bg-yellow-500';
+      case 'low': return 'bg-green-500';
+      default: return 'bg-blue-500';
+    }
+  };
+
   return (
     <div 
-      className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'justify-between px-2'} py-2 rounded-lg cursor-pointer text-gray-500 dark:text-[#A1A1AA] hover:bg-gray-100 dark:hover:bg-[#1E1E1E] hover:text-black dark:hover:text-white transition-colors`}
-      title={isCollapsed ? name : ''}
+      className={`flex items-start ${isCollapsed ? 'justify-center px-0' : 'justify-between px-3'} py-3 rounded-xl cursor-pointer bg-gray-50 dark:bg-[#1E1E1E] border border-gray-100 dark:border-[#2A2A2A] hover:border-gray-300 dark:hover:border-[#444] transition-all duration-200 group`}
+      title={isCollapsed ? incident.title : ''}
     >
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-7 rounded-md border border-gray-200 dark:border-[#333333] flex items-center justify-center text-[10px] font-bold bg-gray-50 dark:bg-[#222] shrink-0">
-          {type}
+      <div className="flex items-start gap-3 overflow-hidden">
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${getSeverityColor()}`}>
+          {getIcon()}
         </div>
-        {!isCollapsed && <span className="text-sm truncate max-w-[120px]">{name}</span>}
+        {!isCollapsed && (
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate leading-tight group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
+              {incident.title}
+            </span>
+            <div className="flex items-center gap-1 mt-1 text-gray-500 dark:text-gray-400">
+              <ArrowUpRight size={10} className="shrink-0" />
+              <span className="text-[10px] truncate leading-tight max-w-[140px]">{incident.address}</span>
+            </div>
+          </div>
+        )}
       </div>
-      {!isCollapsed && <span className="text-xs font-mono">{value}</span>}
+      {!isCollapsed && (
+        <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 shrink-0 mt-0.5">
+          {incident.time}
+        </span>
+      )}
     </div>
   );
 }

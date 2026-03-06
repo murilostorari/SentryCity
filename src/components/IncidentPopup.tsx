@@ -67,18 +67,18 @@ export default function IncidentPopup({ incident, onOpenDetails, onClose, isDark
       className={`bg-white dark:bg-[#1E1E1E] border-2 ${getBorderColor()} rounded-xl p-4 w-[320px] shadow-2xl cursor-default transition-colors duration-300 relative z-[100]`}
     >
       <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
           <div className={`w-10 h-10 rounded-full bg-white dark:bg-[#1A1A1A] border-2 flex items-center justify-center shrink-0 ${incident.severity === 'critical' ? 'border-red-500' : 'border-gray-200 dark:border-[#333]'}`}>
             {getIcon()}
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-gray-900 dark:text-white font-bold text-lg">{incident.title}</span>
-              <div className={`w-2 h-2 rounded-full ${getSeverityColor()}`}></div>
+              <span className="text-gray-900 dark:text-white font-bold text-lg truncate">{incident.title}</span>
+              <div className={`w-2 h-2 rounded-full shrink-0 ${getSeverityColor()}`}></div>
             </div>
             <div className="flex items-center gap-1 text-gray-500 dark:text-[#888888] text-xs mt-0.5 min-w-0">
               <AlertOctagon size={12} className="shrink-0" />
-              <span className="truncate">{incident.address}</span>
+              <span className="truncate block">{incident.address}</span>
             </div>
           </div>
         </div>
@@ -87,7 +87,7 @@ export default function IncidentPopup({ incident, onOpenDetails, onClose, isDark
             e.stopPropagation();
             onClose();
           }}
-          className="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center text-gray-500 dark:text-[#888888] hover:text-black dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#333333] transition-colors"
+          className="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center shrink-0 text-gray-500 dark:text-[#888888] hover:text-black dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#333333] transition-colors"
         >
           <X size={16} />
         </button>

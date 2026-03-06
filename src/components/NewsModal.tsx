@@ -90,14 +90,14 @@ export default function NewsModal({ news, incident, onClose, isDarkMode }: NewsM
                 <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0 ${incident.severity === 'critical' ? 'border-red-500' : (isDarkMode ? 'bg-[#1A1A1A] border-[#333]' : 'bg-white border-gray-200')}`}>
                   {getIcon(incident.type)}
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={`font-bold text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{incident.title}</span>
-                    <div className={`w-2 h-2 rounded-full ${getSeverityColor(incident.severity)}`}></div>
+                    <span className={`font-bold text-lg truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{incident.title}</span>
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${getSeverityColor(incident.severity)}`}></div>
                   </div>
-                  <div className={`flex items-center gap-1 text-xs mt-0.5 ${isDarkMode ? 'text-[#888888]' : 'text-gray-500'}`}>
-                    <AlertTriangle size={12} />
-                    <span>{incident.address}</span>
+                  <div className={`flex items-center gap-1 text-xs mt-0.5 min-w-0 ${isDarkMode ? 'text-[#888888]' : 'text-gray-500'}`}>
+                    <AlertTriangle size={12} className="shrink-0" />
+                    <span className="truncate">{incident.address}</span>
                   </div>
                 </div>
               </div>

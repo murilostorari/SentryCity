@@ -42,9 +42,9 @@ export default function OffScreenIndicator({ incident, angle, onClose, onClick, 
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.8, y: 20 }}
       className={`
-        fixed z-30 flex items-center gap-3 p-2 pr-3 rounded-xl shadow-lg backdrop-blur-md border cursor-pointer
-        md:bottom-8 md:left-20 
-        top-20 left-4 md:top-auto
+        absolute z-30 flex items-center gap-3 p-2 pr-3 rounded-xl shadow-lg backdrop-blur-md border cursor-pointer
+        md:bottom-8 md:left-8 
+        bottom-24 left-4 md:top-auto
         ${isDarkMode ? 'bg-[#1E1E1E]/90 border-white/10 text-white' : 'bg-white/90 border-gray-200 text-gray-900'}
       `}
       onClick={onClick}

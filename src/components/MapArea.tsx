@@ -153,8 +153,8 @@ export default function MapArea({
   }, [selectedStation, selectedIncidentData]);
 
   // Define static zones
-  const highRiskZone = useMemo(() => createGeoJSONCircle([4.885, 52.362], 0.4), []);
-  const weatherZone = useMemo(() => createGeoJSONCircle([4.870, 52.365], 0.6), []);
+  const highRiskZone = useMemo(() => createGeoJSONCircle([-51.0700, -21.6850], 0.4), []);
+  const weatherZone = useMemo(() => createGeoJSONCircle([-51.0780, -21.6790], 0.6), []);
 
   // Handle 2D/3D toggle
   useEffect(() => {
@@ -182,8 +182,8 @@ export default function MapArea({
       <Map
         ref={mapRef}
         initialViewState={{
-          longitude: 4.876,
-          latitude: 52.359,
+          longitude: -51.0737,
+          latitude: -21.6820,
           zoom: 13,
           pitch: 45, // Initial 3D perspective
           bearing: -10

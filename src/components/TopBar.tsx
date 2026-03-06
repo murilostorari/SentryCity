@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, ChangeEvent, KeyboardEvent } from 'react';
 import { Search, Check, BarChart, Calendar, Train, Target, RotateCw, Moon, Sun, Menu, Filter, Bell, ChevronDown, Clock, AlertTriangle, Activity, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -29,33 +29,104 @@ export default function TopBar({
   typeFilter?: string[],
   setTypeFilter?: (filters: string[]) => void,
   onNewEvent?: () => void,
-  onSearch?: (query: string) => void
+  onSearch?: (query: string | { lat: number, lng: number, label?: string }) => void
 }) {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const abortController = useRef<AbortController | null>(null);
 
-  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSearch = async (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && onSearch) {
-      onSearch(searchQuery);
+      // Cancel any pending suggestion fetch
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+      if (abortController.current) abortController.current.abort();
+
+      if (searchQuery.length > 2) {
+        try {
+          // Use Photon API for direct search as well
+          const response = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=1`);
+          const data = await response.json();
+          
+          if (data.features && data.features.length > 0) {
+            const feature = data.features[0];
+            const name = [feature.properties.name, feature.properties.city, feature.properties.country].filter(Boolean).join(', ');
+            
+            onSearch({
+              lat: feature.geometry.coordinates[1],
+              lng: feature.geometry.coordinates[0],
+              label: name
+            });
+          } else {
+             onSearch(searchQuery);
+          }
+        } catch (error) {
+          console.error("Search failed:", error);
+          onSearch(searchQuery);
+        }
+      } else {
+        onSearch(searchQuery);
+      }
       setShowSuggestions(false);
     }
   };
 
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
 
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+
+    // Cancel any ongoing request to prevent race conditions
+    if (abortController.current) {
+      abortController.current.abort();
+      abortController.current = null;
+    }
+
     if (value.length > 2) {
-      try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}&limit=5`);
-        const data = await response.json();
-        setSuggestions(data);
-        setShowSuggestions(true);
-      } catch (error) {
-        console.error("Failed to fetch suggestions:", error);
-      }
+      searchTimeout.current = setTimeout(async () => {
+        const controller = new AbortController();
+        abortController.current = controller;
+
+        try {
+          // Use Photon API (based on OSM) which is more reliable for client-side requests
+          const response = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(value)}&limit=5`, {
+            signal: controller.signal
+          });
+          const data = await response.json();
+          
+          // Transform Photon GeoJSON to our suggestion format
+          const suggestions = data.features.map((feature: any) => {
+            const isStreet = feature.properties.osm_key === 'highway' || feature.properties.osm_key === 'building' || feature.properties.type === 'house';
+            return {
+              display_name: [feature.properties.name, feature.properties.city, feature.properties.country].filter(Boolean).join(', '),
+              lat: feature.geometry.coordinates[1],
+              lng: feature.geometry.coordinates[0],
+              zoom: isStreet ? 17 : 13
+            };
+          });
+          
+          setSuggestions(suggestions);
+          setShowSuggestions(true);
+        } catch (error: any) {
+          if (error.name === 'AbortError') return;
+          
+          // Suppress error log for user and use fallback silently
+          // console.error("Failed to fetch suggestions:", error);
+          
+          // Fallback suggestions for demo purposes if API fails
+          setSuggestions([
+            { display_name: 'São Paulo, Brasil', lat: -23.5505, lng: -46.6333, zoom: 12 },
+            { display_name: 'Rio de Janeiro, Brasil', lat: -22.9068, lng: -43.1729, zoom: 12 },
+            { display_name: 'Brasília, Brasil', lat: -15.7801, lng: -47.9292, zoom: 12 }
+          ]);
+          setShowSuggestions(true);
+        }
+      }, 1000); // Increased debounce to 1 second as requested
     } else {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -66,7 +137,12 @@ export default function TopBar({
     setSearchQuery(suggestion.display_name);
     setShowSuggestions(false);
     if (onSearch) {
-      onSearch(suggestion.display_name);
+      onSearch({
+        lat: typeof suggestion.lat === 'string' ? parseFloat(suggestion.lat) : suggestion.lat,
+        lng: typeof suggestion.lng === 'string' ? parseFloat(suggestion.lng) : suggestion.lng,
+        label: suggestion.display_name,
+        zoom: suggestion.zoom || 16
+      });
     }
   };
 
@@ -315,23 +391,11 @@ export default function TopBar({
           </AnimatePresence>
         </div>
 
-        <div className="hidden lg:flex items-center gap-2 px-2">
-          <div className="w-px h-4 bg-gray-200 dark:bg-[#333333] mx-1"></div>
-          <button className="px-2 text-sm text-gray-700 dark:text-white flex items-center gap-1 hover:text-blue-600 dark:hover:text-[#3B82F6] transition-colors">
-            Ao Vivo <span className="w-2 h-2 rounded-full bg-green-500 ml-1 animate-pulse"></span>
-          </button>
-        </div>
-
         <button 
           onClick={toggleTheme}
           className="p-2 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg text-gray-500 dark:text-[#888888] hover:text-gray-900 dark:hover:text-white transition-colors shadow-sm"
         >
           {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-
-        <button className="p-2 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg text-gray-500 dark:text-[#888888] hover:text-gray-900 dark:hover:text-white transition-colors shadow-sm hidden sm:block relative">
-          <Bell size={16} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-[#1E1E1E]"></span>
         </button>
 
         <button 

@@ -34,79 +34,46 @@ export interface Incident {
 const INITIAL_INCIDENTS: Incident[] = [
   { 
     id: 'INC-001', 
-    lat: 52.359, 
-    lng: 4.876, 
+    lat: -21.6820, 
+    lng: -51.0737, 
     type: 'accident', 
     severity: 'critical', 
     status: 'active', 
     title: 'Colisão Grave', 
     description: 'Acidente com múltiplos veículos bloqueando duas faixas.', 
-    address: 'Av. Paulista, 1578 - Bela Vista, São Paulo - SP',
+    address: 'Av. Rio Branco, 500 - Centro, Adamantina - SP',
     time: '12m atrás', 
     radius: 300, 
     timestamp: Date.now() - 12 * 60 * 1000,
     news: [
       {
-        source: 'G1 Globo',
-        title: 'Acidente grave bloqueia trânsito no centro da cidade após colisão múltipla',
-        description: 'Uma colisão envolvendo três veículos causou um grande congestionamento na manhã desta terça-feira. Equipes de resgate estão no local para atender as vítimas e liberar a via o mais rápido possível.',
+        source: 'G1 Presidente Prudente',
+        title: 'Acidente grave bloqueia trânsito no centro de Adamantina',
+        description: 'Uma colisão envolvendo três veículos causou um grande congestionamento na manhã desta terça-feira. Equipes de resgate estão no local.',
         imageUrl: 'https://picsum.photos/seed/accident/300/200',
-        url: 'https://g1.globo.com',
+        url: 'https://g1.globo.com/sp/presidente-prudente-regiao/',
         time: '10 min atrás'
-      },
-      {
-        source: 'R7 Notícias',
-        title: 'Trânsito parado na região central devido a acidente',
-        description: 'Motoristas devem evitar a área. CET recomenda rotas alternativas.',
-        imageUrl: 'https://picsum.photos/seed/traffic/300/200',
-        url: 'https://r7.com',
-        time: '15 min atrás'
-      },
-      {
-        source: 'BandNews',
-        title: 'Bombeiros atuam em resgate de vítimas de colisão',
-        description: 'Duas pessoas ficaram feridas e foram encaminhadas ao hospital mais próximo.',
-        imageUrl: 'https://picsum.photos/seed/rescue/300/200',
-        url: 'https://band.uol.com.br',
-        time: '20 min atrás'
       }
     ]
   },
   { 
     id: 'INC-002', 
-    lat: 52.362, 
-    lng: 4.885, 
+    lat: -21.6850, 
+    lng: -51.0700, 
     type: 'power', 
     severity: 'high', 
     status: 'active', 
     title: 'Queda de Energia', 
-    description: 'Falha de energia em todo o distrito relatada.', 
-    address: 'Rua Augusta, 500 - Consolação, São Paulo - SP',
+    description: 'Falha de energia em todo o bairro relatada.', 
+    address: 'Rua Osvaldo Cruz, 200 - Vila Cicma, Adamantina - SP',
     time: '45m atrás', 
     radius: 1200, 
     timestamp: Date.now() - 45 * 60 * 1000,
-    news: [
-      {
-        source: 'CNN Brasil',
-        title: 'Apagão atinge diversos bairros da zona sul; concessionária investiga causas',
-        description: 'Moradores relatam falta de luz desde as 14h. Semáforos apagados causam confusão no trânsito da região.',
-        imageUrl: 'https://picsum.photos/seed/power/300/200',
-        url: 'https://www.cnnbrasil.com.br',
-        time: '40 min atrás'
-      },
-      {
-        source: 'Folha de S.Paulo',
-        title: 'Falta de luz afeta comércio e moradores',
-        description: 'Comerciantes contabilizam prejuízos com a falta de energia elétrica nesta tarde.',
-        imageUrl: 'https://picsum.photos/seed/dark/300/200',
-        url: 'https://folha.uol.com.br',
-        time: '35 min atrás'
-      }
-    ]
+    news: []
   },
-  { id: 'INC-003', lat: 52.355, lng: 4.890, type: 'pothole', severity: 'medium', status: 'investigating', title: 'Perigo na Estrada', description: 'Buraco profundo causando danos aos pneus.', address: 'Rua da Consolação, 2300 - Cerqueira César, São Paulo - SP', time: '2h atrás', radius: 50, timestamp: Date.now() - 2 * 60 * 60 * 1000 },
-  { id: 'INC-004', lat: 52.365, lng: 4.870, type: 'weather', severity: 'high', status: 'active', title: 'Inundação Urbana', description: 'Inundação na rua devido à chuva forte.', address: 'Av. Rebouças, 1000 - Pinheiros, São Paulo - SP', time: '5m atrás', radius: 800, timestamp: Date.now() - 5 * 60 * 1000 },
-  { id: 'INC-005', lat: 52.350, lng: 4.880, type: 'accident', severity: 'low', status: 'cleared', title: 'Acidente Leve', description: 'Colisão traseira, liberada para o acostamento.', address: 'Av. Brigadeiro Faria Lima, 3000 - Itaim Bibi, São Paulo - SP', time: '3h atrás', radius: 100, timestamp: Date.now() - 3 * 60 * 60 * 1000 },
+  { id: 'INC-003', lat: -21.6880, lng: -51.0750, type: 'pothole', severity: 'medium', status: 'investigating', title: 'Perigo na Estrada', description: 'Buraco profundo causando danos aos pneus.', address: 'Av. Adhemar de Barros, 150 - Centro, Adamantina - SP', time: '2h atrás', radius: 50, timestamp: Date.now() - 2 * 60 * 60 * 1000 },
+  { id: 'INC-004', lat: -21.6790, lng: -51.0780, type: 'weather', severity: 'high', status: 'active', title: 'Alagamento', description: 'Ponto de alagamento devido à chuva forte.', address: 'Via de Acesso, km 2 - Adamantina - SP', time: '5m atrás', radius: 800, timestamp: Date.now() - 5 * 60 * 1000 },
+  { id: 'INC-005', lat: -21.6810, lng: -51.0720, type: 'accident', severity: 'low', status: 'cleared', title: 'Acidente Leve', description: 'Colisão traseira, liberada.', address: 'Rua Fioravante Spósito, 100 - Centro, Adamantina - SP', time: '3h atrás', radius: 100, timestamp: Date.now() - 3 * 60 * 60 * 1000 },
 ];
 
 export default function App() {
@@ -118,6 +85,7 @@ export default function App() {
   const [isNewEventModalOpen, setIsNewEventModalOpen] = useState(false);
   const [flyToCoordinates, setFlyToCoordinates] = useState<{ lat: number, lng: number, zoom?: number } | null>(null);
   const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
+  const [currentCity, setCurrentCity] = useState('Adamantina, SP');
 
   // Filter States
   const [severityFilter, setSeverityFilter] = useState<string[]>([]);
@@ -175,17 +143,32 @@ export default function App() {
     setIncidents(prev => [...newEvents, ...prev]);
   };
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = async (query: string | { lat: number, lng: number, label?: string, zoom?: number }) => {
+    if (typeof query === 'object') {
+      setFlyToCoordinates({ lat: query.lat, lng: query.lng, zoom: query.zoom || 16 });
+      if (query.label) {
+        // Extract city name if possible, otherwise use label
+        const parts = query.label.split(',');
+        setCurrentCity(parts[0]);
+      }
+      generateMockEvents(query.lat, query.lng);
+      return;
+    }
+
     try {
       const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
       const data = await response.json();
       
       if (data && data.length > 0) {
-        const { lat, lon } = data[0];
+        const { lat, lon, display_name } = data[0];
         const newLat = parseFloat(lat);
         const newLng = parseFloat(lon);
         
-        setFlyToCoordinates({ lat: newLat, lng: newLng, zoom: 13 });
+        const parts = display_name.split(',');
+        setCurrentCity(parts[0]);
+
+        // Determine zoom based on type if possible, otherwise default to 16 for direct searches
+        setFlyToCoordinates({ lat: newLat, lng: newLng, zoom: 16 });
         generateMockEvents(newLat, newLng);
       }
     } catch (error) {
@@ -250,7 +233,11 @@ export default function App() {
 
       {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <Sidebar onClose={() => setIsSidebarOpen(false)} />
+        <Sidebar 
+          onClose={() => setIsSidebarOpen(false)} 
+          currentCity={currentCity}
+          incidents={incidents}
+        />
       </div>
 
       <div className="flex-1 flex flex-col relative w-full">
