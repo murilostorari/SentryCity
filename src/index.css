@@ -7,12 +7,10 @@
 
 @variant dark (&:where(.dark, .dark *));
 
-/* Apply Inter font globally */
 body {
   font-family: var(--font-sans);
 }
 
-/* Hide default Google Maps InfoWindow chrome */
 .gm-style-iw {
   background: none !important;
   box-shadow: none !important;
@@ -49,7 +47,6 @@ button.gm-ui-hover-effect {
   display: none !important;
 }
 
-/* MapLibre Popup Customization */
 .maplibregl-popup {
   z-index: 100 !important;
 }

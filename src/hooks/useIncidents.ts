@@ -23,6 +23,30 @@ const INITIAL_INCIDENTS: Incident[] = [
         imageUrl: 'https://picsum.photos/seed/accident/300/200',
         url: 'https://g1.globo.com/sp/presidente-prudente-regiao/',
         time: '10 min atrás'
+      },
+      {
+        source: 'Siga Mais',
+        title: 'Trânsito lento na Av. Rio Branco após colisão',
+        description: 'Motoristas devem evitar a região central devido ao acidente. Polícia Militar orienta o tráfego.',
+        imageUrl: 'https://picsum.photos/seed/traffic/300/200',
+        url: 'https://sigamais.com/',
+        time: '15 min atrás'
+      },
+      {
+        source: 'Folha Regional',
+        title: 'Bombeiros atendem ocorrência de acidente múltiplo',
+        description: 'Vítimas leves foram encaminhadas para a Santa Casa local. O trânsito segue interditado em meia pista.',
+        imageUrl: 'https://picsum.photos/seed/ambulance/300/200',
+        url: 'https://folharegional.com.br/',
+        time: '20 min atrás'
+      },
+      {
+        source: 'Rádio Life FM',
+        title: 'Ouvintes relatam caos no trânsito do centro',
+        description: 'Diversos relatos de ouvintes indicam que o acidente travou as principais vias de acesso ao comércio.',
+        imageUrl: 'https://picsum.photos/seed/radio/300/200',
+        url: 'https://radiolifefm.com.br/',
+        time: '25 min atrás'
       }
     ]
   },
