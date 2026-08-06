@@ -18,7 +18,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
   const [state, setState] = useState('');
   const [type, setType] = useState('accident');
   const [severity, setSeverity] = useState('medium');
-  const [coordinates, setCoordinates] = useState<{lat: number, lng: number} | null>(null);
+  const [coordinates, setCoordinates] = useState<{ lat: number, lng: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -62,7 +62,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
         setShowCitySuggestions(true);
       }
     } catch (error) {
-      console.error('[v0] Failed to fetch suggestions', error);
+      console.error('Failed to fetch suggestions', error);
     }
   };
 
@@ -83,7 +83,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
   const handleCityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setCity(value);
-    
+
     if (cityTimeout.current) clearTimeout(cityTimeout.current);
     if (value.length > 2) {
       cityTimeout.current = setTimeout(() => fetchSuggestions(value, 'city'), 500);
@@ -161,7 +161,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
         state: resolvedState,
       });
     } catch (error: any) {
-      console.error('[v0] Falha ao salvar evento:', error);
+      console.error('Falha ao salvar evento:', error);
       setSubmitError(error?.message ?? 'Erro ao salvar o evento. Tente novamente.');
     } finally {
       setIsSubmitting(false);
@@ -169,7 +169,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
   };
 
   const translateType = (t: string) => {
-    switch(t) {
+    switch (t) {
       case 'accident': return 'Acidente';
       case 'power': return 'Energia';
       case 'weather': return 'Clima';
@@ -184,7 +184,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
   };
 
   const translateSeverity = (s: string) => {
-    switch(s) {
+    switch (s) {
       case 'critical': return 'Crítico';
       case 'high': return 'Alto';
       case 'medium': return 'Médio';
@@ -201,8 +201,8 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
     <ResponsiveModal isOpen={true} onClose={onClose} className="max-w-md" isDarkMode={isDarkMode}>
       <div className={`flex items-center justify-between p-4 border-b shrink-0 ${isDarkMode ? 'border-[#333]' : 'border-gray-200'}`}>
         <h2 className="text-lg font-semibold">Novo Evento</h2>
-        <button 
-          onClick={onClose} 
+        <button
+          onClick={onClose}
           className={`hidden md:flex w-8 h-8 rounded-full items-center justify-center transition-colors ${isDarkMode ? 'bg-[#2A2A2A] text-[#888888] hover:text-white hover:bg-[#333333]' : 'bg-gray-100 text-gray-500 hover:text-black hover:bg-gray-200'}`}
         >
           <X size={16} />
@@ -212,8 +212,8 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
       <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto flex-1 no-scrollbar" ref={dropdownRef}>
         <div>
           <label className="block text-sm font-medium mb-1 opacity-70">Título</label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             required
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -224,7 +224,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
 
         <div>
           <label className="block text-sm font-medium mb-1 opacity-70">Descrição</label>
-          <textarea 
+          <textarea
             required
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -237,8 +237,8 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
         <div className="grid grid-cols-2 gap-4">
           <div className="relative">
             <label className="block text-sm font-medium mb-1 opacity-70">Rua</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               required
               value={street}
               onChange={handleStreetChange}
@@ -270,8 +270,8 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
           </div>
           <div className="relative">
             <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               required
               value={city}
               onChange={handleCityChange}
@@ -306,7 +306,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
         <div className="grid grid-cols-2 gap-4">
           <div className="relative">
             <label className="block text-sm font-medium mb-1 opacity-70">Tipo</label>
-            <button 
+            <button
               type="button"
               onClick={() => toggleDropdown('type')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] hover:bg-[#333]' : 'bg-white border-gray-300 hover:bg-gray-50'} transition-colors`}
@@ -314,7 +314,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
               <span>{translateType(type)}</span>
               <ChevronDown size={16} className={`transition-transform ${activeDropdown === 'type' ? 'rotate-180' : ''}`} />
             </button>
-            
+
             <AnimatePresence>
               {activeDropdown === 'type' && (
                 <motion.div
@@ -344,7 +344,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
 
           <div className="relative">
             <label className="block text-sm font-medium mb-1 opacity-70">Severidade</label>
-            <button 
+            <button
               type="button"
               onClick={() => toggleDropdown('severity')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] hover:bg-[#333]' : 'bg-white border-gray-300 hover:bg-gray-50'} transition-colors`}
@@ -388,7 +388,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
         )}
 
         <div className="pt-4 flex justify-end gap-3">
-          <button 
+          <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
@@ -396,7 +396,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
           >
             Cancelar
           </button>
-          <button 
+          <button
             type="submit"
             disabled={isSubmitting}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-900/20"

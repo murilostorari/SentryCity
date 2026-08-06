@@ -14,12 +14,12 @@ import { Incident } from './types/Incident';
 
 export default function App() {
   const { incidents, addIncident } = useIncidents();
-  const { 
-    filteredIncidents, 
-    severityFilter, setSeverityFilter, 
-    statusFilter, setStatusFilter, 
-    timeFilter, setTimeFilter, 
-    typeFilter, setTypeFilter 
+  const {
+    filteredIncidents,
+    severityFilter, setSeverityFilter,
+    statusFilter, setStatusFilter,
+    timeFilter, setTimeFilter,
+    typeFilter, setTypeFilter
   } = useFilters(incidents);
   const { flyToCoordinates, currentCity, handleSearch: performSearch } = useSearch();
 
@@ -52,7 +52,7 @@ export default function App() {
       setIsNewEventModalOpen(false);
       setSelectedStation(newEvent.id);
     } catch (err) {
-      console.error('[v0] Falha ao criar incidente:', err);
+      console.error('Falha ao criar incidente:', err);
       alert('Não foi possível salvar o evento. Verifique a conexão e tente novamente.');
     }
   };
@@ -69,7 +69,7 @@ export default function App() {
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -81,15 +81,15 @@ export default function App() {
 
       {/* New Event Modal */}
       {isNewEventModalOpen && (
-        <NewEventModal 
-          onClose={() => setIsNewEventModalOpen(false)} 
+        <NewEventModal
+          onClose={() => setIsNewEventModalOpen(false)}
           onSave={handleNewEvent}
           isDarkMode={isDarkMode}
         />
       )}
 
       {/* Recent Alerts Modal */}
-      <RecentAlertsModal 
+      <RecentAlertsModal
         isOpen={isRecentAlertsModalOpen}
         onClose={() => setIsRecentAlertsModalOpen(false)}
         incidents={incidents}
@@ -103,8 +103,8 @@ export default function App() {
 
       {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <Sidebar 
-          onClose={() => setIsSidebarOpen(false)} 
+        <Sidebar
+          onClose={() => setIsSidebarOpen(false)}
           currentCity={currentCity}
           incidents={incidents}
           onOpenRecentAlerts={() => setIsRecentAlertsModalOpen(true)}
@@ -113,10 +113,10 @@ export default function App() {
 
       <div className="flex-1 flex flex-col relative w-full">
         <div className="absolute inset-0">
-          <MapArea 
+          <MapArea
             incidents={filteredIncidents}
-            onSelectStation={handleSelectStation} 
-            selectedStation={selectedStation} 
+            onSelectStation={handleSelectStation}
+            selectedStation={selectedStation}
             onOpenDetails={() => setShowDetails(true)}
             showDetails={showDetails}
             isDarkMode={isDarkMode}
@@ -124,11 +124,11 @@ export default function App() {
             isNewsModalOpen={isNewsModalOpen}
           />
         </div>
-        
+
         <div className="absolute top-0 left-0 right-0 pointer-events-none z-10">
-          <TopBar 
-            onMenuClick={() => setIsSidebarOpen(true)} 
-            isDarkMode={isDarkMode} 
+          <TopBar
+            onMenuClick={() => setIsSidebarOpen(true)}
+            isDarkMode={isDarkMode}
             toggleTheme={toggleTheme}
             severityFilter={severityFilter}
             setSeverityFilter={setSeverityFilter}
@@ -145,7 +145,7 @@ export default function App() {
 
         <AnimatePresence>
           {showDetails && selectedStation && selectedIncident && (
-            <motion.div 
+            <motion.div
               initial={{ x: '100%', opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: '100%', opacity: 0 }}
@@ -160,10 +160,10 @@ export default function App() {
         {/* News Card */}
         <AnimatePresence>
           {selectedIncident && selectedIncident.news && (
-            <NewsCard 
-              news={selectedIncident.news} 
+            <NewsCard
+              news={selectedIncident.news}
               incident={selectedIncident}
-              isDarkMode={isDarkMode} 
+              isDarkMode={isDarkMode}
               isModalOpen={isNewsModalOpen}
               onOpenModal={() => setIsNewsModalOpen(true)}
               onCloseModal={() => setIsNewsModalOpen(false)}

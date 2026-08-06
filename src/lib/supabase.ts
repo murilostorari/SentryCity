@@ -14,7 +14,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   // Não quebra a aplicação, apenas avisa. As chamadas ao Supabase falharão
   // de forma controlada até as variáveis serem configuradas.
   console.warn(
-    '[v0] Variáveis do Supabase ausentes. Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.'
+    'Variáveis do Supabase ausentes. Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.'
   );
 }
 

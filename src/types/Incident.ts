@@ -1,3 +1,33 @@
+export type ReportType = 'confirm' | 'deny' | 'resolved' | 'update';
+
+export interface IncidentReport {
+  id: string;
+  incident_id: string;
+  user_id: string | null;
+  type: ReportType;
+  comment: string | null;
+  created_at: string;
+}
+
+export interface ReportCounts {
+  confirm: number;
+  deny: number;
+  resolved: number;
+  update: number;
+  total: number;
+}
+
+export interface TimelineItem {
+  id: string;
+  type: 'system' | 'user_report';
+  event_type: string;
+  description: string;
+  created_at: string;
+  report_type?: ReportType;
+  comment?: string;
+  user_id?: string | null;
+}
+
 export interface Incident {
   id: string;
   lat: number;
@@ -19,4 +49,5 @@ export interface Incident {
     url: string;
     time: string;
   }[];
+  reportCounts?: ReportCounts;
 }

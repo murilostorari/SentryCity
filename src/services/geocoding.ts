@@ -66,7 +66,7 @@ export async function geocodeAddress(query: string): Promise<GeocodeResult | nul
       state,
     };
   } catch (error) {
-    console.error('[v0] geocodeAddress falhou:', error);
+    console.error('geocodeAddress falhou:', error);
     return null;
   }
 }
@@ -98,7 +98,7 @@ export async function searchAddressSuggestions(
       raw: item,
     }));
   } catch (error) {
-    console.error('[v0] searchAddressSuggestions falhou:', error);
+    console.error('searchAddressSuggestions falhou:', error);
     return [];
   }
 }

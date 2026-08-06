@@ -100,7 +100,7 @@ export async function fetchIncidents(): Promise<Incident[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('[v0] fetchIncidents falhou:', error.message);
+    console.error('fetchIncidents falhou:', error.message);
     throw error;
   }
   return (data as IncidentRow[]).map(mapRowToIncident);
@@ -133,7 +133,7 @@ export async function createIncident(input: CreateIncidentInput): Promise<Incide
     .single();
 
   if (error) {
-    console.error('[v0] createIncident falhou:', error.message);
+    console.error('createIncident falhou:', error.message);
     throw error;
   }
   return mapRowToIncident(data as IncidentRow);
