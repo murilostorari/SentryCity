@@ -5,6 +5,7 @@
  * Gerencia confirmações, negações, resoluções e atualizações de usuários.
  */
 import { supabase } from '../lib/supabase';
+import { calculateSimpleConfidence } from './confidenceCalculation';
 
 export type ReportType = 'confirm' | 'deny' | 'resolved' | 'update';
 
@@ -44,6 +45,17 @@ export interface TimelineItem {
   report_type?: ReportType;
   comment?: string;
   user_id?: string | null;
+}
+
+/** Dados de frequência por hora (últimas 24h). */
+export interface HourlyFrequencyData {
+  hour: number; // 0-23
+  label: string; // "14:00"
+  count: number;
+  confirm: number;
+  deny: number;
+  resolved: number;
+  update: number;
 }
 
 /** Mapeia tipo do relato para label amigável. */
@@ -191,4 +203,123 @@ export async function fetchUnifiedTimeline(incidentId: string): Promise<Timeline
   );
 
   return allItems;
+}
+
+/** Busca frequência de relatos por hora (últimas 24h). */
+export async function fetchHourlyFrequency(incidentId: string): Promise<HourlyFrequencyData[]> {
+  const now = new Date();
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('incident_reports')
+    .select('created_at, type')
+    .eq('incident_id', incidentId)
+    .gte('created_at', twentyFourHoursAgo)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('fetchHourlyFrequency falhou:', error.message);
+    throw error;
+  }
+
+  // Inicializar array de 24 horas com zeros
+  const hourlyData: HourlyFrequencyData[] = Array.from({ length: 24 }, (_, i) => {
+    const date = new Date(now);
+    date.setHours(date.getHours() - 23 + i, 0, 0, 0);
+    const hour = date.getHours();
+    const label = `${hour.toString().padStart(2, '0')}:00`;
+    return { hour, label, count: 0, confirm: 0, deny: 0, resolved: 0, update: 0 };
+  });
+
+  // Agrupar relatos por hora
+  (data as IncidentReportRow[]).forEach(row => {
+    const reportDate = new Date(row.created_at);
+    const hoursDiff = Math.floor((now.getTime() - reportDate.getTime()) / (1000 * 60 * 60));
+    const index = 23 - hoursDiff; // 0 = 23h atrás, 23 = agora
+    
+    if (index >= 0 && index < 24) {
+      hourlyData[index].count++;
+      hourlyData[index][row.type]++;
+    }
+  });
+
+  return hourlyData;
+}
+
+/** Detalhes de confiança para exibição no frontend. */
+export interface ConfidenceDetails {
+  score: number;           // 0-1
+  percentage: number;      // 0-100
+  label: string;           // "Alta", "Média", etc.
+  color: string;           // CSS color class
+  bg: string;              // CSS bg class
+  factors: {
+    sourceTrust: number;
+    userConfirms: number;
+    userDenies: number;
+    userResolved: number;
+    aiConfidence?: number;
+    sourceConfirmationsAvg?: number;
+    sourceConfirmationsCount?: number;
+  };
+}
+
+/** Busca detalhes de confiança de um incidente (para exibição). */
+export async function fetchIncidentConfidence(incidentId: string): Promise<ConfidenceDetails> {
+  // Buscar fatores necessários
+  const [{ data: incident }, { data: source }, { data: reports }, { data: ai }, { data: confirmations }] = await Promise.all([
+    supabase.from('incidents').select('confidence_score, source_id').eq('id', incidentId).single(),
+    supabase.from('sources').select('trust_score').eq('id', (await supabase.from('incidents').select('source_id').eq('id', incidentId).single()).data?.source_id).single(),
+    supabase.from('incident_reports').select('type').eq('incident_id', incidentId),
+    supabase.from('ai_analysis').select('confidence').eq('incident_id', incidentId).order('created_at', { ascending: false }).limit(1),
+    supabase.from('incident_confirmations').select('similarity_score').eq('incident_id', incidentId).eq('confirmed', true),
+  ]);
+
+  const sourceTrust = source?.trust_score ?? 0.5;
+  const userConfirms = (reports || []).filter(r => r.type === 'confirm').length;
+  const userDenies = (reports || []).filter(r => r.type === 'deny').length;
+  const userResolved = (reports || []).filter(r => r.type === 'resolved').length;
+  const aiConfidence = ai?.[0]?.confidence;
+  const sourceConfirmationsAvg = confirmations?.length ? confirmations.reduce((a, b) => a + (b.similarity_score || 0), 0) / confirmations.length : undefined;
+  const sourceConfirmationsCount = confirmations?.length ?? 0;
+
+  // Usar score do banco se disponível, senão calcular
+  const score = incident?.confidence_score ?? calculateSimpleConfidence(sourceTrust, userConfirms, userDenies, userResolved);
+  const percentage = Math.round(score * 100);
+
+  const labels = [
+    { min: 0.8, label: 'Muito Alta', color: 'text-green-700 dark:text-green-300', bg: 'bg-green-100 dark:bg-green-900/30' },
+    { min: 0.6, label: 'Alta', color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' },
+    { min: 0.4, label: 'Média', color: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-100 dark:bg-amber-900/20' },
+    { min: 0.2, label: 'Baixa', color: 'text-orange-700 dark:text-orange-300', bg: 'bg-orange-100 dark:bg-orange-900/20' },
+    { min: 0, label: 'Muito Baixa', color: 'text-red-700 dark:text-red-300', bg: 'bg-red-100 dark:bg-red-900/30' },
+  ];
+  const labelInfo = labels.find(l => score >= l.min) || labels[labels.length - 1];
+
+  return {
+    score,
+    percentage,
+    label: labelInfo.label,
+    color: labelInfo.color,
+    bg: labelInfo.bg,
+    factors: {
+      sourceTrust,
+      userConfirms,
+      userDenies,
+      userResolved,
+      aiConfidence,
+      sourceConfirmationsAvg,
+      sourceConfirmationsCount,
+    },
+  };
+}
+
+/** Força recálculo de confiança no banco (chama RPC). */
+export async function recalculateConfidence(incidentId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('recalculate_incident_confidence', { p_incident_id: incidentId });
+  if (error) {
+    console.error('recalculateConfidence falhou:', error.message);
+    throw error;
+  }
+  return data as number;
 }

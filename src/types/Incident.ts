@@ -28,6 +28,33 @@ export interface TimelineItem {
   user_id?: string | null;
 }
 
+export interface HourlyFrequencyData {
+  hour: number;
+  label: string;
+  count: number;
+  confirm: number;
+  deny: number;
+  resolved: number;
+  update: number;
+}
+
+export interface ConfidenceDetails {
+  score: number;
+  percentage: number;
+  label: string;
+  color: string;
+  bg: string;
+  factors: {
+    sourceTrust: number;
+    userConfirms: number;
+    userDenies: number;
+    userResolved: number;
+    aiConfidence?: number;
+    sourceConfirmationsAvg?: number;
+    sourceConfirmationsCount?: number;
+  };
+}
+
 export interface Incident {
   id: string;
   lat: number;

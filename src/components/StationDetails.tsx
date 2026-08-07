@@ -1,16 +1,10 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare } from 'lucide-react';
+import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, XCircle as XCircleIcon, Shield as ShieldIcon, Edit3 } from 'lucide-react';
 import { BarChart, Bar, ResponsiveContainer, AreaChart, Area, CartesianGrid, YAxis } from 'recharts';
-import { Incident, ReportCounts, TimelineItem, ReportType } from '../types/Incident';
+import { Incident, ReportCounts, TimelineItem, ReportType, HourlyFrequencyData, ConfidenceDetails } from '../types/Incident';
 import { useIncidentReports, getReportTypeLabel as getReportTypeLabelFn, getReportTypeStyle as getReportTypeStyleFn, formatRelativeTime as formatRelativeTimeFn } from '../hooks/useIncidentReports';
 import { motion, AnimatePresence } from 'motion/react';
-
-const timelineData = Array.from({ length: 24 }).map((_, i) => ({
-  time: `${i}:00`,
-  value: Math.random() * 100 + (i > 10 && i < 18 ? 50 : 0),
-  isNow: i === 18
-}));
 
 const severityData = Array.from({ length: 24 }).map((_, i) => ({
   time: `${i}:00`,
@@ -30,10 +24,13 @@ export default function StationDetails({ incident, onClose }: { incident: Incide
   const { 
     counts, 
     timeline, 
+    hourlyFrequency,
+    confidence,
     isLoading, 
     isSubmitting, 
     submitReport, 
-    refresh 
+    refresh,
+    refreshConfidence
   } = useIncidentReports(incident.id);
 
   const translateSeverity = (sev: string) => {
@@ -75,25 +72,28 @@ export default function StationDetails({ incident, onClose }: { incident: Incide
       {/* Header */}
       <div className="p-5 pb-0">
         <div className="flex items-start justify-between mb-4">
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-lg font-medium text-gray-900 dark:text-white">{incident.id}</h2>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getSeverityColor(incident.severity)}`}>
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white truncate">{incident.title}</h2>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getSeverityColor(incident.severity)} shrink-0`}>
                 {translateSeverity(incident.severity)}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-gray-500 dark:text-[#888888] text-sm">
-              <MapPin size={12} />
-              <span>{incident.lat.toFixed(4)}, {incident.lng.toFixed(4)}</span>
+            <div className="flex items-center gap-1.5 text-gray-500 dark:text-[#888888] text-sm min-w-0">
+              <MapPin size={12} className="shrink-0" />
+              <span className="truncate">{incident.address || `${incident.lat.toFixed(4)}, ${incident.lng.toFixed(4)}`}</span>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center text-gray-500 dark:text-[#888888] hover:text-black dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#333333] transition-colors">
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center text-gray-500 dark:text-[#888888] hover:text-black dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#333333] transition-colors shrink-0">
             <X size={16} />
           </button>
         </div>
 
-        {/* Report Counters */}
-        <ReportCounters counts={counts} isDarkMode={false} />
+        {/* Report Counters - Inline style like action buttons */}
+        <ReportCounters counts={counts} />
+
+        {/* Confidence Display */}
+        <ConfidenceDisplay confidence={confidence} onRefresh={refreshConfidence} />
 
         {/* Tabs */}
         <div className="flex items-center gap-6 border-b border-gray-200 dark:border-[#2C2C2C]">
@@ -109,6 +109,7 @@ export default function StationDetails({ incident, onClose }: { incident: Incide
           incident={incident} 
           translateSeverity={translateSeverity} 
           onReportClick={openReportModal}
+          hourlyFrequency={hourlyFrequency}
         />}
         {activeTab === 'Linha do Tempo' && <TimelineTab 
           timeline={timeline} 
@@ -188,27 +189,65 @@ export default function StationDetails({ incident, onClose }: { incident: Incide
   );
 }
 
-function ReportCounters({ counts, isDarkMode }: { counts: ReportCounts; isDarkMode: boolean }) {
+function ReportCounters({ counts }: { counts: ReportCounts }) {
   const counterStyles = [
-    { key: 'confirm' as keyof ReportCounts, label: 'Confirmações', color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' },
-    { key: 'deny' as keyof ReportCounts, label: 'Negativas', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20' },
-    { key: 'resolved' as keyof ReportCounts, label: 'Resoluções', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-    { key: 'total' as keyof ReportCounts, label: 'Total relatos', color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-900/20' },
+    { key: 'confirm' as keyof ReportCounts, label: 'Confirmam', icon: <CheckCircle size={14} />, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-900/30' },
+    { key: 'deny' as keyof ReportCounts, label: 'Negam', icon: <XCircleIcon size={14} />, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-900/30' },
+    { key: 'resolved' as keyof ReportCounts, label: 'Resolvem', icon: <ShieldIcon size={14} />, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-900/30' },
+    { key: 'total' as keyof ReportCounts, label: 'Total', icon: <MessageSquare size={14} />, color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-700' },
   ];
 
   return (
-    <div className="mb-4 p-3 bg-gray-50 dark:bg-[#262626] rounded-lg border border-gray-200 dark:border-[#2C2C2C]">
-      <div className="flex items-center gap-1.5 mb-2">
-        <MessageSquare size={14} className="text-gray-500 dark:text-[#888888]" />
-        <span className="text-xs font-semibold text-gray-500 dark:text-[#888888] tracking-wider uppercase">Relatos da Comunidade</span>
+    <div className="mb-4 flex flex-wrap gap-2">
+      {counterStyles.map(({ key, label, icon, color, bg, border }) => (
+        <button
+          key={key}
+          type="button"
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${border} ${bg} ${color} hover:opacity-80 transition-opacity text-sm`}
+          disabled
+          aria-label={`${counts[key]} ${label}`}
+        >
+          <span className="w-5 h-5 flex items-center justify-center">{icon}</span>
+          <span className="font-medium">{counts[key]}</span>
+          <span className="text-xs opacity-70">{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ConfidenceDisplay({ confidence, onRefresh }: { confidence: ConfidenceDetails | null; onRefresh: () => void }) {
+  if (!confidence) return null;
+
+  return (
+    <div className="mb-4 flex items-center gap-3 p-3 rounded-lg border bg-white dark:bg-[#262626] transition-colors">
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${confidence.bg} ${confidence.color}`}>
+        {confidence.percentage}%
       </div>
-      <div className="grid grid-cols-4 gap-2">
-        {counterStyles.map(({ key, label, color, bg }) => (
-          <div key={key} className={`${bg} rounded-lg p-3 text-center`}>
-            <div className={`text-2xl font-bold ${color}`}>{counts[key]}</div>
-            <div className="text-[10px] font-medium text-gray-500 dark:text-[#888888] tracking-wider uppercase mt-0.5">{label}</div>
-          </div>
-        ))}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`font-medium text-sm ${confidence.color}`}>Confiança: {confidence.label}</span>
+          <button
+            onClick={onRefresh}
+            className="ml-auto text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1"
+            title="Recalcular"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Atualizar
+          </button>
+        </div>
+        <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <span>Fonte: {Math.round(confidence.factors.sourceTrust * 100)}%</span>
+          <span>✓ {confidence.factors.userConfirms}</span>
+          <span>✕ {confidence.factors.userDenies}</span>
+          <span>✓R {confidence.factors.userResolved}</span>
+          {confidence.factors.aiConfidence !== undefined && (
+            <span>IA: {Math.round(confidence.factors.aiConfidence * 100)}%</span>
+          )}
+          {confidence.factors.sourceConfirmationsCount && confidence.factors.sourceConfirmationsCount > 0 && (
+            <span>Fontes: {confidence.factors.sourceConfirmationsCount} (avg {Math.round((confidence.factors.sourceConfirmationsAvg || 0) * 100)}%)</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -233,7 +272,7 @@ function Tab({ label, active, badge, onClick }: any) {
   );
 }
 
-function DetailsTab({ incident, translateSeverity, onReportClick }: { incident: Incident, translateSeverity: (s: string) => string, onReportClick: (type: ReportType) => void }) {
+function DetailsTab({ incident, translateSeverity, onReportClick, hourlyFrequency }: { incident: Incident, translateSeverity: (s: string) => string, onReportClick: (type: ReportType) => void, hourlyFrequency: HourlyFrequencyData[] }) {
   return (
     <div className="space-y-6">
       <div className="bg-red-50 dark:bg-[#3A1D1D] border border-red-200 dark:border-[#4A2525] rounded-lg p-3 flex items-start gap-3 text-red-700 dark:text-[#E54D4D] text-sm">
@@ -246,18 +285,18 @@ function DetailsTab({ incident, translateSeverity, onReportClick }: { incident: 
 
       <div>
         <div className="flex items-center gap-1.5 mb-4">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Frequência de Relatos</h3>
+          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Frequência de Relatos (últimas 24h)</h3>
           <Info size={14} className="text-gray-400 dark:text-[#666666]" />
         </div>
         <div className="h-[140px] w-full relative">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={timelineData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <Bar dataKey="value" fill="#EF4444" radius={[2, 2, 0, 0]} />
+            <BarChart data={hourlyFrequency} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <Bar dataKey="count" fill="#EF4444" radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <div className="flex justify-between text-xs text-gray-400 dark:text-[#666666] mt-2">
-            <span>-24h</span>
-            <span>Agora</span>
+            <span>{hourlyFrequency[0]?.label || '-24h'}</span>
+            <span>{hourlyFrequency[23]?.label || 'Agora'}</span>
           </div>
         </div>
       </div>
