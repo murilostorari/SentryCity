@@ -376,25 +376,18 @@ function DetailsTab({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {reportActions.map((action) => {
-            const isDisabled = isCreator && (action.type === 'confirm' || action.type === 'deny');
-            return (
+          {reportActions
+            .filter((action) => !(isCreator && (action.type === 'confirm' || action.type === 'deny')))
+            .map((action) => (
               <button
                 key={action.type}
                 onClick={() => onReportClick(action.type)}
-                disabled={isDisabled}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors text-sm ${
-                  isDisabled
-                    ? 'border-gray-200 dark:border-[#333] bg-gray-100 dark:bg-[#262626] text-gray-400 dark:text-[#666666] cursor-not-allowed'
-                    : 'border-gray-200 dark:border-[#333] bg-white dark:bg-[#262626] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2C2C2C]'
-                }`}
-                title={isDisabled ? 'Você não pode confirmar/negar seu próprio incidente' : undefined}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-[#333] bg-white dark:bg-[#262626] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2C2C2C] transition-colors text-sm"
               >
                 <span className="w-5 h-5 flex items-center justify-center">{action.icon}</span>
                 <span>{action.label}</span>
               </button>
-            );
-          })}
+            ))}
         </div>
       </div>
     </div>

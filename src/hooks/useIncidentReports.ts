@@ -17,6 +17,7 @@ import {
   ConfidenceDetails,
   CreateIncidentReportInput
 } from '../services/incidentReports';
+import { useToast } from '../components/Toast';
 
 export function useIncidentReports(incidentId: string | null) {
   const [reports, setReports] = useState<IncidentReportRow[]>([]);
@@ -27,6 +28,8 @@ export function useIncidentReports(incidentId: string | null) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { success, error: showError } = useToast();
 
   const refresh = useCallback(async () => {
     if (!incidentId) return;
@@ -84,13 +87,23 @@ export function useIncidentReports(incidentId: string | null) {
       } catch {
         // Ignore confidence recalc errors
       }
+      
+      // Toast de sucesso
+      const labels: Record<string, string> = {
+        confirm: 'Ocorrência confirmada',
+        deny: 'Ocorrência negada',
+        resolved: 'Resolução informada',
+        update: 'Atualização enviada',
+      };
+      success(labels[type] || 'Relato enviado');
+      
       return created;
     } catch (err: any) {
       // Tratar erro de constraint única (usuário já fez esse tipo de relato)
       if (err?.code === '23505' || err?.details?.includes?.('incident_reports_unique_user_type')) {
-        setError('Você já enviou este tipo de relato para este incidente.');
+        showError('Duplicado', 'Você já enviou este tipo de relato para este incidente.');
       } else {
-        setError(err?.message ?? 'Falha ao enviar relato.');
+        showError('Erro', err?.message ?? 'Falha ao enviar relato.');
       }
       return null;
     } finally {

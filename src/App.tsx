@@ -8,6 +8,7 @@ import NewEventModal from './components/NewEventModal';
 import NewsCard from './components/NewsCard';
 import RecentAlertsModal from './components/RecentAlertsModal';
 import AuthModal from './components/AuthModal';
+import { ToastProvider } from './components/Toast';
 import { useIncidents } from './hooks/useIncidents';
 import { useFilters } from './hooks/useFilters';
 import { useSearch } from './hooks/useSearch';
@@ -77,7 +78,8 @@ export default function App() {
   const selectedIncident = incidents.find(i => i.id === selectedStation);
 
   return (
-    <div className={`flex h-screen w-full font-sans overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-[#111111] text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <ToastProvider isDarkMode={isDarkMode}>
+      <div className={`flex h-screen w-full font-sans overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-[#111111] text-white' : 'bg-gray-50 text-gray-900'}`}>
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -208,5 +210,6 @@ export default function App() {
         </AnimatePresence>
       </div>
     </div>
-  );
+  </ToastProvider>
+);
 }
