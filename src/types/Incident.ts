@@ -69,6 +69,7 @@ export interface Incident {
   time: string;
   radius: number;
   timestamp: number;
+  created_by?: string | null;
   news?: {
     source: string;
     title: string;

@@ -86,7 +86,12 @@ export function useIncidentReports(incidentId: string | null) {
       }
       return created;
     } catch (err: any) {
-      setError(err?.message ?? 'Falha ao enviar relato.');
+      // Tratar erro de constraint única (usuário já fez esse tipo de relato)
+      if (err?.code === '23505' || err?.details?.includes?.('incident_reports_unique_user_type')) {
+        setError('Você já enviou este tipo de relato para este incidente.');
+      } else {
+        setError(err?.message ?? 'Falha ao enviar relato.');
+      }
       return null;
     } finally {
       setIsSubmitting(false);

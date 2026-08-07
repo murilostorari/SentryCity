@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, XCircle as XCircleIcon, Shield as ShieldIcon, Edit3 } from 'lucide-react';
+import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, XCircle as XCircleIcon, Shield as ShieldIcon, Edit3, User as UserIcon, Star } from 'lucide-react';
 import { BarChart, Bar, ResponsiveContainer, AreaChart, Area, CartesianGrid, YAxis } from 'recharts';
 import { Incident, ReportCounts, TimelineItem, ReportType, HourlyFrequencyData, ConfidenceDetails } from '../types/Incident';
 import { useIncidentReports, getReportTypeLabel as getReportTypeLabelFn, getReportTypeStyle as getReportTypeStyleFn, formatRelativeTime as formatRelativeTimeFn } from '../hooks/useIncidentReports';
 import { motion, AnimatePresence } from 'motion/react';
+import { User } from '@supabase/supabase-js';
+import { Profile } from '../types/Profile';
 
 const severityData = Array.from({ length: 24 }).map((_, i) => ({
   time: `${i}:00`,
@@ -17,7 +19,21 @@ const reportActions: { type: ReportType; label: string; icon: ReactNode; descrip
   { type: 'deny', label: 'Negar ocorrência', icon: <XCircle size={16} />, description: 'Este incidente não está ocorrendo/é falso' },
 ];
 
-export default function StationDetails({ incident, onClose, isAuthenticated, onRequireAuth }: { incident: Incident, onClose: () => void, isAuthenticated?: boolean, onRequireAuth?: () => void }) {
+export default function StationDetails({ 
+  incident, 
+  onClose, 
+  isAuthenticated, 
+  onRequireAuth,
+  user,
+  profile
+}: { 
+  incident: Incident, 
+  onClose: () => void, 
+  isAuthenticated?: boolean, 
+  onRequireAuth?: () => void,
+  user?: User | null,
+  profile?: Profile | null
+}) {
   const [activeTab, setActiveTab] = useState('Detalhes');
   const [reportModal, setReportModal] = useState<{ type: ReportType | null; comment: string }>({ type: null, comment: '' });
   
@@ -53,9 +69,15 @@ export default function StationDetails({ incident, onClose, isAuthenticated, onR
     }
   };
 
+  const isCreator = user && incident.created_by && user.id === incident.created_by;
+
   const openReportModal = (type: ReportType) => {
     if (!isAuthenticated) {
       onRequireAuth?.();
+      return;
+    }
+    if (isCreator && (type === 'confirm' || type === 'deny')) {
+      // Criador não pode confirmar nem negar o próprio incidente
       return;
     }
     setReportModal({ type, comment: '' });
@@ -114,6 +136,8 @@ export default function StationDetails({ incident, onClose, isAuthenticated, onR
           translateSeverity={translateSeverity} 
           onReportClick={openReportModal}
           hourlyFrequency={hourlyFrequency}
+          isCreator={isCreator}
+          profile={profile}
         />}
         {activeTab === 'Linha do Tempo' && <TimelineTab 
           timeline={timeline} 
@@ -277,7 +301,21 @@ function Tab({ label, active, badge, onClick }: any) {
   );
 }
 
-function DetailsTab({ incident, translateSeverity, onReportClick, hourlyFrequency }: { incident: Incident, translateSeverity: (s: string) => string, onReportClick: (type: ReportType) => void, hourlyFrequency: HourlyFrequencyData[] }) {
+function DetailsTab({ 
+  incident, 
+  translateSeverity, 
+  onReportClick, 
+  hourlyFrequency,
+  isCreator,
+  profile
+}: { 
+  incident: Incident, 
+  translateSeverity: (s: string) => string, 
+  onReportClick: (type: ReportType) => void, 
+  hourlyFrequency: HourlyFrequencyData[],
+  isCreator: boolean,
+  profile: Profile | null
+}) {
   return (
     <div className="space-y-6">
       <div className="bg-red-50 dark:bg-[#3A1D1D] border border-red-200 dark:border-[#4A2525] rounded-lg p-3 flex items-start gap-3 text-red-700 dark:text-[#E54D4D] text-sm">
@@ -321,18 +359,42 @@ function DetailsTab({ incident, translateSeverity, onReportClick, hourlyFrequenc
 
       {/* Report Actions */}
       <div className="pt-4 border-t border-gray-200 dark:border-[#2C2C2C]">
-        <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-3 uppercase">Ações</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider uppercase">Ações</h3>
+{profile && (
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-[#888888]">
+                <UserIcon size={12} />
+              <span>Sua reputação:</span>
+              <span className={`font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-[#2A2A2A] ${
+                profile.reputation_score >= 60 ? 'text-green-600 dark:text-green-400' :
+                profile.reputation_score >= 40 ? 'text-amber-600 dark:text-amber-400' :
+                'text-red-600 dark:text-red-400'
+              }`}>
+                {Math.round(profile.reputation_score)}
+              </span>
+            </div>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
-          {reportActions.map((action) => (
-            <button
-              key={action.type}
-              onClick={() => onReportClick(action.type)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-[#333] bg-white dark:bg-[#262626] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2C2C2C] transition-colors text-sm"
-            >
-              <span className="w-5 h-5 flex items-center justify-center">{action.icon}</span>
-              <span>{action.label}</span>
-            </button>
-          ))}
+          {reportActions.map((action) => {
+            const isDisabled = isCreator && (action.type === 'confirm' || action.type === 'deny');
+            return (
+              <button
+                key={action.type}
+                onClick={() => onReportClick(action.type)}
+                disabled={isDisabled}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors text-sm ${
+                  isDisabled
+                    ? 'border-gray-200 dark:border-[#333] bg-gray-100 dark:bg-[#262626] text-gray-400 dark:text-[#666666] cursor-not-allowed'
+                    : 'border-gray-200 dark:border-[#333] bg-white dark:bg-[#262626] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2C2C2C]'
+                }`}
+                title={isDisabled ? 'Você não pode confirmar/negar seu próprio incidente' : undefined}
+              >
+                <span className="w-5 h-5 flex items-center justify-center">{action.icon}</span>
+                <span>{action.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -186,6 +186,8 @@ export default function App() {
                 onClose={() => setShowDetails(false)}
                 isAuthenticated={isAuthenticated}
                 onRequireAuth={() => openAuthModal('login')}
+                user={user}
+                profile={profile}
               />
             </motion.div>
           )}
