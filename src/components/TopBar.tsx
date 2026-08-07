@@ -1,7 +1,10 @@
 import { useState, useRef, ChangeEvent, KeyboardEvent } from 'react';
-import { Search, Check, BarChart, Calendar, Train, Target, RotateCw, Moon, Sun, Menu, Filter, Bell, ChevronDown, Clock, AlertTriangle, Activity, Tag } from 'lucide-react';
+import { Search, Check, BarChart, Calendar, Train, Target, RotateCw, Moon, Sun, Menu, Filter, Bell, ChevronDown, Clock, AlertTriangle, Activity, Tag, LogIn, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FilterDropdown, DropdownItem } from './FilterDropdown';
+import UserMenu from './UserMenu';
+import { User } from '@supabase/supabase-js';
+import { Profile } from '../types/Profile';
 
 export default function TopBar({ 
   onMenuClick, 
@@ -16,7 +19,14 @@ export default function TopBar({
   typeFilter,
   setTypeFilter,
   onNewEvent,
-  onSearch
+  onSearch,
+  isAuthenticated,
+  user,
+  profile,
+  authLoading,
+  onLogin,
+  onSignup,
+  onLogout
 }: { 
   onMenuClick?: () => void, 
   isDarkMode?: boolean, 
@@ -30,7 +40,14 @@ export default function TopBar({
   typeFilter?: string[],
   setTypeFilter?: (filters: string[]) => void,
   onNewEvent?: () => void,
-  onSearch?: (query: string | { lat: number, lng: number, label?: string, zoom?: number }) => void
+  onSearch?: (query: string | { lat: number, lng: number, label?: string, zoom?: number }) => void,
+  isAuthenticated?: boolean,
+  user?: User | null,
+  profile?: Profile | null,
+  authLoading?: boolean,
+  onLogin?: () => void,
+  onSignup?: () => void,
+  onLogout?: () => void
 }) {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -377,9 +394,34 @@ export default function TopBar({
           Novo Evento
         </button>
 
-        <div className="w-9 h-9 bg-gray-900 dark:bg-[#333] rounded-lg flex items-center justify-center text-white font-bold text-sm cursor-pointer hover:opacity-90 transition-opacity shadow-sm border border-gray-200 dark:border-[#444]">
-          OS
-        </div>
+        {isAuthenticated && user ? (
+          <UserMenu
+            user={user}
+            profile={profile ?? null}
+            isDarkMode={!!isDarkMode}
+            onLogout={() => onLogout?.()}
+          />
+        ) : authLoading ? (
+          <div className="w-16 h-9 rounded-lg bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] shadow-sm flex items-center justify-center">
+            <Loader2 size={14} className="animate-spin text-gray-400 dark:text-[#666666]" />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onSignup}
+              className="hidden sm:block px-3 py-2 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2A2A2A] transition-colors shadow-sm"
+            >
+              Criar conta
+            </button>
+            <button
+              onClick={onLogin}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 dark:bg-[#3B82F6] text-white rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-blue-500 transition-colors shadow-sm"
+            >
+              <LogIn size={14} />
+              Entrar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

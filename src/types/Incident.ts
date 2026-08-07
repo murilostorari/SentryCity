@@ -47,6 +47,7 @@ export interface ConfidenceDetails {
   factors: {
     sourceTrust: number;
     userConfirms: number;
+    userConfirmWeights: number;
     userDenies: number;
     userResolved: number;
     aiConfidence?: number;

@@ -5,7 +5,7 @@
  * Gerencia confirmações, negações, resoluções e atualizações de usuários.
  */
 import { supabase } from '../lib/supabase';
-import { calculateSimpleConfidence } from './confidenceCalculation';
+import { calculateSimpleConfidence, reputationToWeight } from './confidenceCalculation';
 
 export type ReportType = 'confirm' | 'deny' | 'resolved' | 'update';
 
@@ -114,11 +114,15 @@ export async function fetchIncidentReports(incidentId: string): Promise<Incident
 
 /** Cria um novo relato para um incidente. */
 export async function createIncidentReport(input: CreateIncidentReportInput): Promise<IncidentReportRow> {
+  // Usuário autenticado atual (se houver) para vincular o relato.
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData.user?.id ?? null;
+
   const payload = {
     incident_id: input.incident_id,
     type: input.type,
     comment: input.comment ?? null,
-    user_id: null, // null por enquanto (sem auth), preenchido automaticamente quando auth estiver pronto
+    user_id: userId,
   };
 
   const { data, error } = await supabase
@@ -256,6 +260,7 @@ export interface ConfidenceDetails {
   factors: {
     sourceTrust: number;
     userConfirms: number;
+    userConfirmWeights: number;
     userDenies: number;
     userResolved: number;
     aiConfidence?: number;
@@ -264,15 +269,29 @@ export interface ConfidenceDetails {
   };
 }
 
+/** Busca a soma dos pesos (reputação/100) das confirmações de um incidente. */
+export async function fetchUserConfirmWeights(incidentId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('get_incident_confirm_weights', { p_incident_id: incidentId });
+
+  if (error) {
+    console.error('fetchUserConfirmWeights falhou:', error.message);
+    return 0;
+  }
+
+  const rows = (data as { user_id: string; reputation_score: number }[] | null) ?? [];
+  return rows.reduce((sum, row) => sum + reputationToWeight(row.reputation_score), 0);
+}
+
 /** Busca detalhes de confiança de um incidente (para exibição). */
 export async function fetchIncidentConfidence(incidentId: string): Promise<ConfidenceDetails> {
   // Buscar fatores necessários
-  const [{ data: incident }, { data: source }, { data: reports }, { data: ai }, { data: confirmations }] = await Promise.all([
+  const [{ data: incident }, { data: source }, { data: reports }, { data: ai }, { data: confirmations }, confirmWeights] = await Promise.all([
     supabase.from('incidents').select('confidence_score, source_id').eq('id', incidentId).single(),
     supabase.from('sources').select('trust_score').eq('id', (await supabase.from('incidents').select('source_id').eq('id', incidentId).single()).data?.source_id).single(),
     supabase.from('incident_reports').select('type').eq('incident_id', incidentId),
     supabase.from('ai_analysis').select('confidence').eq('incident_id', incidentId).order('created_at', { ascending: false }).limit(1),
     supabase.from('incident_confirmations').select('similarity_score').eq('incident_id', incidentId).eq('confirmed', true),
+    fetchUserConfirmWeights(incidentId),
   ]);
 
   const sourceTrust = source?.trust_score ?? 0.5;
@@ -283,8 +302,8 @@ export async function fetchIncidentConfidence(incidentId: string): Promise<Confi
   const sourceConfirmationsAvg = confirmations?.length ? confirmations.reduce((a, b) => a + (b.similarity_score || 0), 0) / confirmations.length : undefined;
   const sourceConfirmationsCount = confirmations?.length ?? 0;
 
-  // Usar score do banco se disponível, senão calcular
-  const score = incident?.confidence_score ?? calculateSimpleConfidence(sourceTrust, userConfirms, userDenies, userResolved);
+  // Usar score do banco se disponível, senão calcular (com pesos de reputação)
+  const score = incident?.confidence_score ?? calculateSimpleConfidence(sourceTrust, userConfirms, userDenies, userResolved, confirmWeights);
   const percentage = Math.round(score * 100);
 
   const labels = [
@@ -305,6 +324,7 @@ export async function fetchIncidentConfidence(incidentId: string): Promise<Confi
     factors: {
       sourceTrust,
       userConfirms,
+      userConfirmWeights: Math.round(confirmWeights * 1000) / 1000,
       userDenies,
       userResolved,
       aiConfidence,

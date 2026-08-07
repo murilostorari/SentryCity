@@ -29,6 +29,9 @@ declare
   v_source_conf_avg   numeric(4,3);
   v_source_conf_count int := 0;
   v_confidence        numeric(4,3);
+  v_user_score        numeric;
+  v_source_conf_score numeric;
+  v_ai_score          numeric;
 begin
   -- 1. Trust score da fonte original
   select s.trust_score
@@ -66,35 +69,21 @@ begin
   -- Pesos: source=0.30, user=0.35, ai=0.20, source_conf=0.15
   
   -- User score: (confirms + resolved - denies) / total, normalizado -1..1 -> 0..1
-  declare
-    v_user_total int := v_user_confirms + v_user_denies + v_user_resolved;
-    v_user_raw   numeric;
-    v_user_score numeric;
-  begin
-    if v_user_total = 0 then
-      v_user_score := 0.5;
-    else
-      v_user_raw := (v_user_confirms + v_user_resolved - v_user_denies)::numeric / v_user_total;
-      v_user_score := (v_user_raw + 1) / 2; -- Normaliza -1..1 para 0..1
-    end if;
-  end;
+  if (v_user_confirms + v_user_denies + v_user_resolved) = 0 then
+    v_user_score := 0.5;
+  else
+    v_user_score := ((v_user_confirms + v_user_resolved - v_user_denies)::numeric / (v_user_confirms + v_user_denies + v_user_resolved) + 1) / 2;
+  end if;
 
   -- Source confirmation score
-  declare
-    v_source_conf_score numeric;
-  begin
-    if v_source_conf_count = 0 or v_source_conf_avg is null then
-      v_source_conf_score := 0.5;
-    else
-      v_source_conf_score := v_source_conf_avg * least(v_source_conf_count::numeric / 5, 1) + 0.5 * (1 - least(v_source_conf_count::numeric / 5, 1));
-    end if;
-  end;
+  if v_source_conf_count = 0 or v_source_conf_avg is null then
+    v_source_conf_score := 0.5;
+  else
+    v_source_conf_score := v_source_conf_avg * least(v_source_conf_count::numeric / 5, 1) + 0.5 * (1 - least(v_source_conf_count::numeric / 5, 1));
+  end if;
 
   -- AI score
-  declare
-    v_ai_score numeric := coalesce(v_ai_confidence, 0.5);
-  begin
-  end;
+  v_ai_score := coalesce(v_ai_confidence, 0.5);
 
   -- Weighted average
   v_confidence := 

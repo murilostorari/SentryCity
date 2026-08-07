@@ -7,10 +7,14 @@ import StationDetails from './components/StationDetails';
 import NewEventModal from './components/NewEventModal';
 import NewsCard from './components/NewsCard';
 import RecentAlertsModal from './components/RecentAlertsModal';
+import AuthModal from './components/AuthModal';
 import { useIncidents } from './hooks/useIncidents';
 import { useFilters } from './hooks/useFilters';
 import { useSearch } from './hooks/useSearch';
+import { useAuth } from './hooks/useAuth';
 import { Incident } from './types/Incident';
+
+type AuthMode = 'login' | 'signup';
 
 export default function App() {
   const { incidents, addIncident } = useIncidents();
@@ -22,6 +26,7 @@ export default function App() {
     typeFilter, setTypeFilter
   } = useFilters(incidents);
   const { flyToCoordinates, currentCity, handleSearch: performSearch } = useSearch();
+  const { user, profile, isAuthenticated, isLoading, signIn, signUp, signOut } = useAuth();
 
   const [selectedStation, setSelectedStation] = useState<string | null>('INC-001');
   const [showDetails, setShowDetails] = useState(false);
@@ -30,6 +35,13 @@ export default function App() {
   const [isNewEventModalOpen, setIsNewEventModalOpen] = useState(false);
   const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
   const [isRecentAlertsModalOpen, setIsRecentAlertsModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<AuthMode>('login');
+
+  const openAuthModal = (mode: AuthMode = 'login') => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
 
   useEffect(() => {
     if (isDarkMode) {
@@ -88,6 +100,16 @@ export default function App() {
         />
       )}
 
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        isDarkMode={isDarkMode}
+        initialMode={authModalMode}
+        onSignIn={signIn}
+        onSignUp={signUp}
+      />
+
       {/* Recent Alerts Modal */}
       <RecentAlertsModal
         isOpen={isRecentAlertsModalOpen}
@@ -140,6 +162,13 @@ export default function App() {
             setTypeFilter={setTypeFilter}
             onNewEvent={() => setIsNewEventModalOpen(true)}
             onSearch={handleSearch}
+            isAuthenticated={isAuthenticated}
+            user={user}
+            profile={profile}
+            authLoading={isLoading}
+            onLogin={() => openAuthModal('login')}
+            onSignup={() => openAuthModal('signup')}
+            onLogout={signOut}
           />
         </div>
 
@@ -152,7 +181,12 @@ export default function App() {
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
               className="absolute top-20 right-0 bottom-0 md:right-6 md:bottom-6 w-full md:w-[380px] pointer-events-auto z-30"
             >
-              <StationDetails incident={selectedIncident} onClose={() => setShowDetails(false)} />
+              <StationDetails
+                incident={selectedIncident}
+                onClose={() => setShowDetails(false)}
+                isAuthenticated={isAuthenticated}
+                onRequireAuth={() => openAuthModal('login')}
+              />
             </motion.div>
           )}
         </AnimatePresence>

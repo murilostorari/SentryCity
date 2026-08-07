@@ -17,7 +17,7 @@ const reportActions: { type: ReportType; label: string; icon: ReactNode; descrip
   { type: 'deny', label: 'Negar ocorrência', icon: <XCircle size={16} />, description: 'Este incidente não está ocorrendo/é falso' },
 ];
 
-export default function StationDetails({ incident, onClose }: { incident: Incident, onClose: () => void }) {
+export default function StationDetails({ incident, onClose, isAuthenticated, onRequireAuth }: { incident: Incident, onClose: () => void, isAuthenticated?: boolean, onRequireAuth?: () => void }) {
   const [activeTab, setActiveTab] = useState('Detalhes');
   const [reportModal, setReportModal] = useState<{ type: ReportType | null; comment: string }>({ type: null, comment: '' });
   
@@ -54,6 +54,10 @@ export default function StationDetails({ incident, onClose }: { incident: Incide
   };
 
   const openReportModal = (type: ReportType) => {
+    if (!isAuthenticated) {
+      onRequireAuth?.();
+      return;
+    }
     setReportModal({ type, comment: '' });
   };
 
@@ -241,6 +245,7 @@ function ConfidenceDisplay({ confidence, onRefresh }: { confidence: ConfidenceDe
           <span>✓ {confidence.factors.userConfirms}</span>
           <span>✕ {confidence.factors.userDenies}</span>
           <span>✓R {confidence.factors.userResolved}</span>
+          <span>Peso: {confidence.factors.userConfirmWeights.toFixed(1)}</span>
           {confidence.factors.aiConfidence !== undefined && (
             <span>IA: {Math.round(confidence.factors.aiConfidence * 100)}%</span>
           )}
