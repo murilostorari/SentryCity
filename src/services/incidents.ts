@@ -24,6 +24,8 @@ export interface IncidentRow {
   state: string | null;
   confidence_score: number | null;
   reported_at: string | null;
+  resolved_at: string | null;
+  expires_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -89,6 +91,8 @@ export function mapRowToIncident(row: IncidentRow): Incident {
     time: formatRelativeTime(timestamp),
     radius: severityToRadius(row.severity),
     timestamp,
+    resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
+    expiresAt: row.expires_at ? new Date(row.expires_at).getTime() : null,
   };
 }
 
