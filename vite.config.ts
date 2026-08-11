@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => {
       'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_URL),
       'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
       'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY),
+      'process.env.AI_PRODUCT_MODEL': JSON.stringify(env.AI_PRODUCT_MODEL),
+      'process.env.AI_PRODUCT_PROVIDER': JSON.stringify(env.AI_PRODUCT_PROVIDER),
     },
     resolve: {
       alias: {

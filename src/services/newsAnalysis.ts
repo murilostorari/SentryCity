@@ -31,6 +31,11 @@ export const FREE_MODELS = {
 
 const DEFAULT_MODEL = FREE_MODELS.deepseek;
 
+/** Retorna o modelo configurado via variável de ambiente (AI_PRODUCT_MODEL), ou o default. */
+export function getActiveModel(): string {
+  return (process.env.AI_PRODUCT_MODEL as string | undefined)?.trim() || DEFAULT_MODEL;
+}
+
 const SYSTEM_PROMPT = `Você é um analista de OSINT especializado em incidentes urbanos.
 Receberá o texto de uma notícia e deve extrair as informações do incidente descrito.
 Responda SOMENTE com um objeto JSON válido, sem texto adicional, no formato:
@@ -84,7 +89,7 @@ function normalizeResult(raw: any): NewsAnalysisResult {
  */
 export async function analyzeNewsText(
   newsText: string,
-  model: string = DEFAULT_MODEL
+  model: string = getActiveModel()
 ): Promise<NewsAnalysisResult> {
   const apiKey = process.env.OPENROUTER_API_KEY as string | undefined;
 

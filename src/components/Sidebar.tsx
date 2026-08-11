@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, ChevronLeft, ChevronRight, X, AlertTriangle, Bell } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight, X, AlertTriangle, Bell, Newspaper } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Incident } from '../types/Incident';
 
@@ -8,9 +8,11 @@ interface SidebarProps {
   currentCity?: string;
   incidents?: Incident[];
   onOpenRecentAlerts?: () => void;
+  isAdmin?: boolean;
+  onOpenNewsIngestion?: () => void;
 }
 
-export default function Sidebar({ onClose, currentCity = "Adamantina, SP", incidents = [], onOpenRecentAlerts }: SidebarProps) {
+export default function Sidebar({ onClose, currentCity = "Adamantina, SP", incidents = [], onOpenRecentAlerts, isAdmin = false, onOpenNewsIngestion }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
@@ -82,6 +84,24 @@ export default function Sidebar({ onClose, currentCity = "Adamantina, SP", incid
                 Alertas Recentes
               </motion.span>
             </button>
+
+            {isAdmin && (
+              <button 
+                onClick={onOpenNewsIngestion}
+                className={`w-full flex items-center h-12 rounded-xl cursor-pointer transition-all duration-200 text-gray-500 dark:text-[#A1A1AA] hover:bg-gray-100 dark:hover:bg-[#1E1E1E] hover:text-black dark:hover:text-white relative overflow-hidden group`}
+                title={isCollapsed ? "Ingestão de Notícias" : ''}
+              >
+                <div className="absolute left-3 flex items-center justify-center w-6 h-6">
+                  <Newspaper size={20} />
+                </div>
+                <motion.span 
+                  animate={{ opacity: isCollapsed ? 0 : 1, x: isCollapsed ? -10 : 0 }}
+                  className="absolute left-12 text-sm font-semibold whitespace-nowrap"
+                >
+                  Ingestão de Notícias
+                </motion.span>
+              </button>
+            )}
           </div>
         </div>
       </motion.div>

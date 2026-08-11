@@ -8,6 +8,7 @@ import NewEventModal from './components/NewEventModal';
 import NewsCard from './components/NewsCard';
 import RecentAlertsModal from './components/RecentAlertsModal';
 import AuthModal from './components/AuthModal';
+import NewsIngestionModal from './components/NewsIngestionModal';
 import { ToastProvider } from './components/Toast';
 import { useIncidents } from './hooks/useIncidents';
 import { useFilters } from './hooks/useFilters';
@@ -18,7 +19,7 @@ import { Incident } from './types/Incident';
 type AuthMode = 'login' | 'signup';
 
 export default function App() {
-  const { incidents, addIncident } = useIncidents();
+  const { incidents, addIncident, refresh } = useIncidents();
   const {
     filteredIncidents,
     severityFilter, setSeverityFilter,
@@ -38,6 +39,7 @@ export default function App() {
   const [isRecentAlertsModalOpen, setIsRecentAlertsModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<AuthMode>('login');
+  const [isNewsIngestionModalOpen, setIsNewsIngestionModalOpen] = useState(false);
 
   const openAuthModal = (mode: AuthMode = 'login') => {
     setAuthModalMode(mode);
@@ -73,6 +75,10 @@ export default function App() {
   const handleSearch = async (query: string | { lat: number, lng: number, label?: string, zoom?: number }) => {
     // A busca apenas reposiciona o mapa; os incidentes vêm do Supabase.
     await performSearch(query);
+  };
+
+  const handleNewsIngestionCreated = async () => {
+    await refresh();
   };
 
   const selectedIncident = incidents.find(i => i.id === selectedStation);
@@ -112,6 +118,15 @@ export default function App() {
         onSignUp={signUp}
       />
 
+      {/* News Ingestion Modal (Admin) */}
+      {isNewsIngestionModalOpen && (
+        <NewsIngestionModal
+          onClose={() => setIsNewsIngestionModalOpen(false)}
+          onCreated={handleNewsIngestionCreated}
+          isDarkMode={isDarkMode}
+        />
+      )}
+
       {/* Recent Alerts Modal */}
       <RecentAlertsModal
         isOpen={isRecentAlertsModalOpen}
@@ -132,6 +147,8 @@ export default function App() {
           currentCity={currentCity}
           incidents={incidents}
           onOpenRecentAlerts={() => setIsRecentAlertsModalOpen(true)}
+          isAdmin={profile?.role === 'admin' || profile?.role === 'analyst'}
+          onOpenNewsIngestion={() => setIsNewsIngestionModalOpen(true)}
         />
       </div>
 
