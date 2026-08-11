@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { X, Loader2, Sparkles, Newspaper, MapPin, Check, ChevronDown, FileText, Save, AlertTriangle } from 'lucide-react';
+import { X, Loader2, Sparkles, Newspaper, MapPin, Check, ChevronDown, FileText, Save, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ResponsiveModal from './ResponsiveModal';
 import { ingestNewsText, confirmIngestion, NewsIngestionResult } from '../services/newsIngestion';
 import { geocodeAddress } from '../services/geocoding';
+import { buildGeocodeQuery, formatLocation, NewsLocation } from '../services/newsAnalysis';
 
 interface NewsIngestionModalProps {
   onClose: () => void;
@@ -42,6 +43,17 @@ const inputClass = (isDarkMode: boolean) =>
     isDarkMode ? 'bg-[#2C2C2C] border-[#444] focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'
   }`;
 
+const emptyLoc = (): NewsLocation => ({
+  street: '',
+  number: '',
+  neighborhood: '',
+  city: '',
+  state: '',
+  zip_code: '',
+  cross_street: '',
+  reference: '',
+});
+
 export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: NewsIngestionModalProps) {
   const [newsText, setNewsText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -54,15 +66,16 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
   const [description, setDescription] = useState('');
   const [type, setType] = useState('other');
   const [severity, setSeverity] = useState('medium');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
   const [confidence, setConfidence] = useState(0);
+  const [loc, setLoc] = useState<NewsLocation>(emptyLoc());
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [isRegeocoding, setIsRegeocoding] = useState(false);
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+
+  const setLocField = (field: keyof NewsLocation, value: string) =>
+    setLoc((prev) => ({ ...prev, [field]: value }));
 
   const handleAnalyze = async () => {
     setError(null);
@@ -71,13 +84,11 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
       const res = await ingestNewsText(newsText);
       setResult(res);
       setTitle(res.analysis.title);
-      setDescription(res.analysis.title);
+      setDescription(res.analysis.description || res.analysis.title);
       setType(res.analysis.type);
       setSeverity(res.analysis.severity);
-      setAddress(res.analysis.address || res.geocodeAddress || '');
-      setCity(res.analysis.city);
-      setState(res.analysis.state);
       setConfidence(res.analysis.confidence_score);
+      setLoc(res.analysis.location);
       setLat(res.lat);
       setLng(res.lng);
     } catch (err: any) {
@@ -91,14 +102,11 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
     setIsRegeocoding(true);
     setError(null);
     try {
-      const query = [address, city, state].filter(Boolean).join(', ');
+      const query = buildGeocodeQuery(loc);
       const geo = await geocodeAddress(query);
       if (geo) {
         setLat(geo.lat);
         setLng(geo.lng);
-        if (!address) setAddress(geo.displayName);
-        if (!city) setCity(geo.city);
-        if (!state) setState(geo.state);
       } else {
         setError('Não foi possível geocodificar o endereço. Verifique os dados.');
       }
@@ -120,16 +128,15 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
         model: result.model,
         analysis: {
           title,
+          description,
           type,
           severity: severity as 'low' | 'medium' | 'high' | 'critical',
-          address,
-          city,
-          state,
           confidence_score: confidence,
+          location: loc,
         },
         lat,
         lng,
-        address,
+        address: formatLocation(loc),
       });
       onCreated(created);
       onClose();
@@ -212,6 +219,40 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               </div>
             )}
 
+            {/* MODO REVISÃO: local encontrado + coordenadas */}
+            <div className={`rounded-xl border p-3 space-y-2 ${lat != null && lng != null ? (isDarkMode ? 'bg-[#0F1F17] border-[#1E4D35]' : 'bg-green-50 border-green-200') : (isDarkMode ? 'bg-[#3A2D1D] border-[#4A3A1D]' : 'bg-amber-50 border-amber-200')}`}>
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <MapPin size={15} className={isDarkMode ? 'text-green-400' : 'text-green-600'} />
+                <span>Local encontrado</span>
+              </div>
+              <div className="text-sm">
+                <span className={isDarkMode ? 'text-green-300' : 'text-green-800'}>{formatLocation(loc) || '—'}</span>
+              </div>
+              {result.geocodeAddress && (
+                <div className="text-xs opacity-60 truncate" title={result.geocodeAddress}>
+                  {result.geocodeAddress}
+                </div>
+              )}
+              {lat != null && lng != null && (
+                <div className="text-xs opacity-70">
+                  Coordenadas: {lat.toFixed(6)}, {lng.toFixed(6)}
+                </div>
+              )}
+              {lat == null && (
+                <div className="text-xs opacity-70">
+                  Coordenadas não encontradas — ajuste os campos abaixo e clique em Localizar.
+                </div>
+              )}
+              <button
+                onClick={handleRegeocode}
+                disabled={isRegeocoding}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-medium transition-colors"
+              >
+                {isRegeocoding ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                Localizar
+              </button>
+            </div>
+
             <div>
               <label className="block text-sm font-medium mb-1 opacity-70">Título</label>
               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass(isDarkMode)} />
@@ -292,14 +333,14 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-3">
               <div className="col-span-1">
                 <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
-                <input type="text" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass(isDarkMode)} />
+                <input type="text" value={loc.city} onChange={(e) => setLocField('city', e.target.value)} className={inputClass(isDarkMode)} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 opacity-70">Estado</label>
-                <input type="text" value={state} onChange={(e) => setState(e.target.value)} className={inputClass(isDarkMode)} placeholder="SP" />
+                <input type="text" value={loc.state} onChange={(e) => setLocField('state', e.target.value)} className={inputClass(isDarkMode)} placeholder="SP" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 opacity-70">Confiança (%)</label>
@@ -314,26 +355,35 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1 opacity-70">Endereço</label>
-              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass(isDarkMode)} placeholder="Rua, número, bairro..." />
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1 opacity-70">Logradouro</label>
+                <input type="text" value={loc.street} onChange={(e) => setLocField('street', e.target.value)} className={inputClass(isDarkMode)} placeholder="Rua, Avenida..." />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-70">Número</label>
+                <input type="text" value={loc.number} onChange={(e) => setLocField('number', e.target.value)} className={inputClass(isDarkMode)} placeholder="123" />
+              </div>
             </div>
 
-            <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 border ${lat != null && lng != null ? (isDarkMode ? 'bg-[#1D3A2D] border-[#4A2525] text-green-400' : 'bg-green-50 border-green-200 text-green-700') : (isDarkMode ? 'bg-[#3A2D1D] border-[#4A3A1D] text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700')}`}>
-              <MapPin size={16} className="shrink-0" />
-              {lat != null && lng != null ? (
-                <span>Localizado: {lat.toFixed(5)}, {lng.toFixed(5)}</span>
-              ) : (
-                <span>Localização não encontrada. Revise o endereço e tente novamente.</span>
-              )}
-              <button
-                onClick={handleRegeocode}
-                disabled={isRegeocoding}
-                className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-medium transition-colors"
-              >
-                {isRegeocoding ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
-                Localizar
-              </button>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1 opacity-70">Bairro</label>
+                <input type="text" value={loc.neighborhood} onChange={(e) => setLocField('neighborhood', e.target.value)} className={inputClass(isDarkMode)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-70">CEP</label>
+                <input type="text" value={loc.zip_code} onChange={(e) => setLocField('zip_code', e.target.value)} className={inputClass(isDarkMode)} placeholder="00000-000" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-70">Cruzamento</label>
+                <input type="text" value={loc.cross_street} onChange={(e) => setLocField('cross_street', e.target.value)} className={inputClass(isDarkMode)} placeholder="Rua transversal" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">Ponto de referência</label>
+              <input type="text" value={loc.reference} onChange={(e) => setLocField('reference', e.target.value)} className={inputClass(isDarkMode)} placeholder="Próximo ao..." />
             </div>
 
             {error && (

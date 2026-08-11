@@ -4,12 +4,23 @@
  * Orquestra o fluxo completo de ingestão de uma notícia:
  *  1. Salva o texto original em `raw_reports`;
  *  2. Analisa com a LLM via OpenRouter (`newsAnalysis.ts`);
- *  3. Geocodifica o endereço extraído (`geocoding.ts`);
+ *  3. Geocodifica a localização extraída (`geocoding.ts`) usando apenas
+ *     street + neighborhood + city + state;
  *  4. Cria o incidente em `incidents`;
  *  5. Salva a resposta da IA em `ai_analysis` e marca o raw_report como processado.
+ *
+ * Arquitetura preparada para ingestão por URL: `ingestNewsUrl` recebe uma URL,
+ * extrai o texto via `fetchArticleText` (scraping ainda não implementado) e
+ * reutiliza o mesmo pipeline de análise.
  */
 import { supabase } from '../lib/supabase';
-import { analyzeNewsText, getActiveModel, NewsAnalysisResult } from './newsAnalysis';
+import {
+  analyzeNewsText,
+  buildGeocodeQuery,
+  formatLocation,
+  getActiveModel,
+  NewsAnalysisResult,
+} from './newsAnalysis';
 import { geocodeAddress } from './geocoding';
 import { IncidentRow } from './incidents';
 import { Incident } from '../types/Incident';
@@ -36,19 +47,52 @@ export interface ConfirmIngestionInput {
   address: string;
 }
 
-/**
+interface IngestInput {
+  text: string;
+  originalUrl?: string;
+}/**
  * Etapa 1: salva o texto original e analisa com IA + geocoding.
  * Não cria o incidente — retorna o preview para confirmação.
  */
 export async function ingestNewsText(newsText: string): Promise<NewsIngestionResult> {
-  if (!newsText || newsText.trim().length < 10) {
+  return runIngestion({ text: newsText });
+}
+
+/**
+ * Etapa 1 (URL): camada futura de ingestão por URL.
+ * O scraping do texto ainda não é implementado; ao habilitar, a URL será salva
+ * em `raw_reports.original_url` e o texto extraído seguirá o pipeline normal.
+ */
+export async function ingestNewsUrl(url: string): Promise<NewsIngestionResult> {
+  if (!url || !/^https?:\/\/\S+$/i.test(url.trim())) {
+    throw new Error('URL inválida.');
+  }
+  const text = await fetchArticleText(url);
+  return runIngestion({ text, originalUrl: url });
+}
+
+/**
+ * Extrai o texto de uma notícia a partir de uma URL.
+ * PONTO DE EXTENSÃO: o scraping será implementado aqui futuramente
+ * (ex: readability/cheerio em uma função serverless). Por ora, lança erro claro.
+ */
+export async function fetchArticleText(_url: string): Promise<string> {
+  throw new Error(
+    'Extração de notícia por URL ainda não implementada. Cole o texto da notícia manualmente.'
+  );
+}
+
+async function runIngestion({ text, originalUrl }: IngestInput): Promise<NewsIngestionResult> {
+  const t0 = performance.now();
+
+  if (!text || text.trim().length < 10) {
     throw new Error('Texto da notícia muito curto para análise.');
   }
 
   // 1. Salvar o texto original em raw_reports
   const { data: rawReport, error: rawError } = await supabase
     .from('raw_reports')
-    .insert({ original_text: newsText, processed: false })
+    .insert({ original_text: text, original_url: originalUrl ?? null, processed: false })
     .select('id')
     .single();
 
@@ -60,45 +104,60 @@ export async function ingestNewsText(newsText: string): Promise<NewsIngestionRes
   const rawReportId = rawReport.id as string;
 
   // 2. Analisar com IA via OpenRouter
+  const tAi = performance.now();
   let analysis: NewsAnalysisResult | null = null;
   let aiAnalyzed = false;
   try {
-    analysis = await analyzeNewsText(newsText);
+    analysis = await analyzeNewsText(text);
     aiAnalyzed = true;
   } catch (error: any) {
     // Sem chave de API (ou falha da LLM): deixa o usuário preencher manualmente.
     console.warn('Análise por IA indisponível:', error?.message ?? error);
     analysis = null;
   }
+  const aiMs = performance.now() - tAi;
 
-  // 3. Geocodificar endereço (usa o extraído pela IA, ou o texto inteiro como fallback)
+  // 3. Geocodificar usando SOMENTE street + neighborhood + city + state
+  const tGeo = performance.now();
   let lat: number | null = null;
   let lng: number | null = null;
   let displayName: string | null = null;
 
-  const addressQuery = analysis?.address
-    ? [analysis.address, analysis.city, analysis.state].filter(Boolean).join(', ')
-    : newsText.trim();
+  const geocodeQuery = analysis ? buildGeocodeQuery(analysis.location) : '';
 
-  if (addressQuery) {
-    const geo = await geocodeAddress(addressQuery);
+  if (geocodeQuery) {
+    const geo = await geocodeAddress(geocodeQuery);
     if (geo) {
       lat = geo.lat;
       lng = geo.lng;
       displayName = geo.displayName;
     }
   }
+  const geocodeMs = performance.now() - tGeo;
+  const totalMs = performance.now() - t0;
+
+  console.log(
+    `[Ingestão] AI: ${aiMs.toFixed(0)}ms | Geocoding: ${geocodeMs.toFixed(0)}ms | Total: ${totalMs.toFixed(0)}ms`
+  );
 
   return {
     rawReportId,
     analysis: analysis ?? {
       title: '',
+      description: '',
       type: 'other',
       severity: 'medium',
-      address: '',
-      city: '',
-      state: '',
       confidence_score: 0,
+      location: {
+        street: '',
+        number: '',
+        neighborhood: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        cross_street: '',
+        reference: '',
+      },
     },
     model: getActiveModel(),
     lat,
@@ -117,9 +176,9 @@ export async function confirmIngestion(input: ConfirmIngestionInput): Promise<In
   const { error: aiError } = await supabase.from('ai_analysis').insert({
     incident_id: incidentRow.id,
     model_name: input.model,
-    prompt_version: 'v1',
+    prompt_version: 'v2',
     extracted_type: input.analysis.type,
-    extracted_location: input.analysis.address,
+    extracted_location: formatLocation(input.analysis.location),
     extracted_severity: input.analysis.severity,
     confidence: input.analysis.confidence_score,
     raw_response: input.analysis as unknown as object,
@@ -145,19 +204,20 @@ export async function confirmIngestion(input: ConfirmIngestionInput): Promise<In
 
 /** Cria o incidente a partir dos dados confirmados (insert + mapeamento). */
 async function createIncidentFromIngestion(input: ConfirmIngestionInput): Promise<Incident> {
+  const loc = input.analysis.location;
   const { data, error } = await supabase
     .from('incidents')
     .insert({
       title: input.analysis.title,
-      description: input.analysis.title,
+      description: input.analysis.description || input.analysis.title,
       type: input.analysis.type,
       severity: input.analysis.severity,
       status: 'active',
       latitude: input.lat,
       longitude: input.lng,
-      address: input.address,
-      city: input.analysis.city,
-      state: input.analysis.state,
+      address: formatLocation(loc),
+      city: loc.city || null,
+      state: loc.state || null,
       confidence_score: input.analysis.confidence_score,
       reported_at: new Date().toISOString(),
     })
