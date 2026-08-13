@@ -206,6 +206,10 @@ export async function confirmIngestion(input: ConfirmIngestionInput): Promise<In
 /** Cria o incidente a partir dos dados confirmados (insert + mapeamento). */
 async function createIncidentFromIngestion(input: ConfirmIngestionInput): Promise<Incident> {
   const loc = input.analysis.location;
+  let createdBy: string | null = null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) createdBy = user.id;
+
   const { data, error } = await supabase
     .from('incidents')
     .insert({
@@ -220,6 +224,7 @@ async function createIncidentFromIngestion(input: ConfirmIngestionInput): Promis
       city: loc.city || null,
       state: loc.state || null,
       confidence_score: input.analysis.confidence_score,
+      created_by: createdBy,
       reported_at: new Date().toISOString(),
     })
     .select('*')

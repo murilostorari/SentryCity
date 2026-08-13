@@ -28,6 +28,7 @@ export interface IncidentRow {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
 }
 
 /** Dados aceitos ao criar um incidente a partir do frontend. */
@@ -43,6 +44,7 @@ export interface CreateIncidentInput {
   city?: string;
   state?: string;
   confidence_score?: number;
+  created_by?: string;
 }
 
 /** Raio (em metros) sugerido para exibição no mapa conforme a severidade. */
@@ -115,6 +117,12 @@ export async function fetchIncidents(): Promise<Incident[]> {
  * O status default é 'active' (evento criado manualmente e vigente).
  */
 export async function createIncident(input: CreateIncidentInput): Promise<Incident> {
+  let createdBy = input.created_by;
+  if (!createdBy) {
+    const { data: { user } } = await supabase.auth.getUser();
+    createdBy = user?.id ?? null;
+  }
+
   const payload = {
     title: input.title,
     description: input.description ?? null,
@@ -127,6 +135,7 @@ export async function createIncident(input: CreateIncidentInput): Promise<Incide
     city: input.city ?? null,
     state: input.state ?? null,
     confidence_score: input.confidence_score ?? 0,
+    created_by: createdBy,
     reported_at: new Date().toISOString(),
   };
 

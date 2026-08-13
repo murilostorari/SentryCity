@@ -29,6 +29,33 @@ export interface GeocodeSuggestion {
   raw: any;
 }
 
+export interface ViaCepResult {
+  cep: string;
+  logradouro: string;
+  complemento: string;
+  bairro: string;
+  localidade: string;
+  uf: string;
+  erro?: boolean;
+}
+
+/** Busca endereço pelo CEP na API ViaCEP. Retorna null se não encontrado. */
+export async function fetchByCep(cep: string): Promise<ViaCepResult | null> {
+  const digits = cep.replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || data.erro) return null;
+    return data as ViaCepResult;
+  } catch (error) {
+    console.error('fetchByCep falhou:', error);
+    return null;
+  }
+}
+
 /** Extrai cidade/estado do bloco `address` do Nominatim de forma resiliente. */
 function extractCityState(addr: any): { city: string; state: string } {
   if (!addr) return { city: '', state: '' };

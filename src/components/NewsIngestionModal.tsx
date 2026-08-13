@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { X, Loader2, Sparkles, Newspaper, MapPin, Check, ChevronDown, FileText, Save, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ResponsiveModal from './ResponsiveModal';
+import ModalTabs from './ModalTabs';
 import { ingestNewsText, confirmIngestion, NewsIngestionResult } from '../services/newsIngestion';
-import { geocodeAddress } from '../services/geocoding';
+import { geocodeAddress, fetchByCep } from '../services/geocoding';
 import { buildGeocodeQuery, formatLocation, NewsLocation } from '../services/newsAnalysis';
 
 interface NewsIngestionModalProps {
@@ -43,12 +44,11 @@ const inputClass = (isDarkMode: boolean) =>
     isDarkMode ? 'bg-[#2C2C2C] border-[#444] focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'
   }`;
 
-const tabClass = (isDarkMode: boolean, active: boolean) =>
-  `flex-1 py-2.5 text-sm font-medium transition-colors rounded-lg ${
-    active
-      ? isDarkMode ? 'bg-[#2A2A2A] text-white' : 'bg-gray-100 text-gray-900'
-      : isDarkMode ? 'text-[#888888] hover:text-white' : 'text-gray-500 hover:text-gray-900'
-  }`;
+const formatCep = (v: string) => {
+  const digits = v.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+};
 
 const emptyLoc = (): NewsLocation => ({
   street: '',
@@ -71,6 +71,8 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<NewsIngestionResult | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('general');
+  const [isCepLoading, setIsCepLoading] = useState(false);
+  const cepTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Campos editáveis do preview
   const [title, setTitle] = useState('');
@@ -123,6 +125,31 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
       }
     } finally {
       setIsRegeocoding(false);
+    }
+  };
+
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = formatCep(e.target.value);
+    setLocField('zip_code', value);
+
+    if (cepTimeout.current) clearTimeout(cepTimeout.current);
+    if (value.replace(/\D/g, '').length === 8) {
+      // Só chama a ViaCEP quando o CEP estiver completo (8 dígitos / padrão 00000-000).
+      cepTimeout.current = setTimeout(async () => {
+        setIsCepLoading(true);
+        const data = await fetchByCep(value);
+        if (data) {
+          setLoc((prev) => ({
+            ...prev,
+            street: data.logradouro || prev.street,
+            complement: data.complemento || prev.complement,
+            neighborhood: data.bairro || prev.neighborhood,
+            city: data.localidade || prev.city,
+            state: data.uf || prev.state,
+          }));
+        }
+        setIsCepLoading(false);
+      }, 400);
     }
   };
 
@@ -265,14 +292,15 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
             </div>
 
             {/* Abas */}
-            <div className={`flex gap-1 p-1 rounded-lg ${isDarkMode ? 'bg-[#1A1A1A]' : 'bg-gray-50'} border ${isDarkMode ? 'border-[#2C2C2C]' : 'border-gray-200'}`}>
-              <button type="button" onClick={() => setActiveTab('general')} className={tabClass(isDarkMode, activeTab === 'general')}>
-                Dados Gerais
-              </button>
-              <button type="button" onClick={() => setActiveTab('address')} className={tabClass(isDarkMode, activeTab === 'address')}>
-                Endereço
-              </button>
-            </div>
+            <ModalTabs
+              active={activeTab}
+              onChange={(t) => setActiveTab(t as Tab)}
+              isDarkMode={isDarkMode}
+              tabs={[
+                { id: 'general', label: 'Dados Gerais' },
+                { id: 'address', label: 'Endereço' },
+              ]}
+            />
 
             {activeTab === 'general' ? (
               <>
@@ -371,30 +399,43 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
             ) : (
               <>
             <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1 opacity-70">CEP</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={loc.zip_code}
+                    onChange={handleCepChange}
+                    className={`${inputClass(isDarkMode)} ${isCepLoading ? 'opacity-60' : ''}`}
+                    placeholder="00000-000"
+                    maxLength={9}
+                  />
+                  {isCepLoading && (
+                    <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />
+                  )}
+                </div>
+              </div>
               <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1 opacity-70">Logradouro</label>
                 <input type="text" value={loc.street} onChange={(e) => setLocField('street', e.target.value)} className={inputClass(isDarkMode)} placeholder="Rua, Avenida..." />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 opacity-70">Número</label>
-                <input type="text" value={loc.number} onChange={(e) => setLocField('number', e.target.value)} className={inputClass(isDarkMode)} placeholder="123" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1 opacity-70">Complemento</label>
-              <input type="text" value={loc.complement} onChange={(e) => setLocField('complement', e.target.value)} className={inputClass(isDarkMode)} placeholder="Apto, bloco, lote..." />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1 opacity-70">Bairro</label>
-                <input type="text" value={loc.neighborhood} onChange={(e) => setLocField('neighborhood', e.target.value)} className={inputClass(isDarkMode)} />
+                <label className="block text-sm font-medium mb-1 opacity-70">Número</label>
+                <input type="text" value={loc.number} onChange={(e) => setLocField('number', e.target.value)} className={inputClass(isDarkMode)} placeholder="123" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 opacity-70">CEP</label>
-                <input type="text" value={loc.zip_code} onChange={(e) => setLocField('zip_code', e.target.value)} className={inputClass(isDarkMode)} placeholder="00000-000" />
+                <label className="block text-sm font-medium mb-1 opacity-70">Complemento</label>
+                <input type="text" value={loc.complement} onChange={(e) => setLocField('complement', e.target.value)} className={inputClass(isDarkMode)} placeholder="Apto, bloco, lote..." />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">Bairro</label>
+              <input type="text" value={loc.neighborhood} onChange={(e) => setLocField('neighborhood', e.target.value)} className={inputClass(isDarkMode)} placeholder="Nome do bairro" />
             </div>
 
             <div className="grid grid-cols-3 gap-3">

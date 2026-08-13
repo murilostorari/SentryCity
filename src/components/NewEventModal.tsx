@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Save, ChevronDown, Check, MapPin, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ResponsiveModal from './ResponsiveModal';
-import { searchAddressSuggestions, geocodeAddress } from '../services/geocoding';
+import ModalTabs from './ModalTabs';
+import { searchAddressSuggestions, geocodeAddress, fetchByCep } from '../services/geocoding';
 
 interface NewEventModalProps {
   onClose: () => void;
@@ -10,14 +11,11 @@ interface NewEventModalProps {
   isDarkMode: boolean;
 }
 
-type Tab = 'general' | 'address';
-
-const tabClass = (isDarkMode: boolean, active: boolean) =>
-  `flex-1 py-2.5 text-sm font-medium transition-colors rounded-lg ${
-    active
-      ? isDarkMode ? 'bg-[#2A2A2A] text-white' : 'bg-gray-100 text-gray-900'
-      : isDarkMode ? 'text-[#888888] hover:text-white' : 'text-gray-500 hover:text-gray-900'
-  }`;
+const formatCep = (v: string) => {
+  const digits = v.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+};
 
 export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventModalProps) {
   const [title, setTitle] = useState('');
@@ -34,7 +32,9 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
   const [coordinates, setCoordinates] = useState<{ lat: number, lng: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('general');
+  const [activeTab, setActiveTab] = useState('general');
+  const [isCepLoading, setIsCepLoading] = useState(false);
+  const cepTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLFormElement>(null);
@@ -137,6 +137,29 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
     setShowCitySuggestions(false);
   };
 
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = formatCep(e.target.value);
+    setZipCode(value);
+    setCoordinates(null);
+
+    if (cepTimeout.current) clearTimeout(cepTimeout.current);
+    if (value.replace(/\D/g, '').length === 8) {
+      // Só chama a ViaCEP quando o CEP estiver completo (8 dígitos / padrão 00000-000).
+      cepTimeout.current = setTimeout(async () => {
+        setIsCepLoading(true);
+        const data = await fetchByCep(value);
+        if (data) {
+          setStreet(data.logradouro);
+          setComplement(data.complemento);
+          setNeighborhood(data.bairro);
+          setCity(data.localidade);
+          setState(data.uf);
+        }
+        setIsCepLoading(false);
+      }, 400);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
@@ -236,14 +259,15 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
 
       <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto flex-1 no-scrollbar" ref={dropdownRef}>
         {/* Abas */}
-        <div className={`flex gap-1 p-1 rounded-lg ${isDarkMode ? 'bg-[#1A1A1A]' : 'bg-gray-50'} border ${isDarkMode ? 'border-[#2C2C2C]' : 'border-gray-200'}`}>
-          <button type="button" onClick={() => setActiveTab('general')} className={tabClass(isDarkMode, activeTab === 'general')}>
-            Dados Gerais
-          </button>
-          <button type="button" onClick={() => setActiveTab('address')} className={tabClass(isDarkMode, activeTab === 'address')}>
-            Endereço
-          </button>
-        </div>
+        <ModalTabs
+          active={activeTab}
+          onChange={setActiveTab}
+          isDarkMode={isDarkMode}
+          tabs={[
+            { id: 'general', label: 'Dados Gerais' },
+            { id: 'address', label: 'Endereço' },
+          ]}
+        />
 
         {activeTab === 'general' ? (
           <>
@@ -353,13 +377,20 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
           <>
             <div>
               <label className="block text-sm font-medium mb-1 opacity-70">CEP</label>
-              <input
-                type="text"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-                className={inputClass}
-                placeholder="00000-000"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={zipCode}
+                  onChange={handleCepChange}
+                  className={`${inputClass} ${isCepLoading ? 'opacity-60' : ''}`}
+                  placeholder="00000-000"
+                  maxLength={9}
+                />
+                {isCepLoading && (
+                  <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
