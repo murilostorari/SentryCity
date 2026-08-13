@@ -151,6 +151,7 @@ async function runIngestion({ text, originalUrl }: IngestInput): Promise<NewsIng
       location: {
         street: '',
         number: '',
+        complement: '',
         neighborhood: '',
         city: '',
         state: '',

@@ -13,6 +13,7 @@
 export interface NewsLocation {
   street: string;
   number: string;
+  complement: string;
   neighborhood: string;
   city: string;
   state: string;
@@ -58,6 +59,7 @@ Responda SOMENTE com um objeto JSON válido, sem texto adicional, no formato:
   "location": {
     "street": "nome do logradouro (ex: Rua Tiradentes, Avenida Paulista), ou vazio se não houver",
     "number": "número do imóvel, ou vazio se não houver",
+    "complement": "complemento (apto, bloco, lote, casa 2), ou vazio se não houver",
     "neighborhood": "bairro, ou vazio se não houver",
     "city": "cidade",
     "state": "sigla do estado (ex: SP), ou vazio",
@@ -90,6 +92,7 @@ const VALID_SEVERITIES = ['low', 'medium', 'high', 'critical'];
 const emptyLocation = (): NewsLocation => ({
   street: '',
   number: '',
+  complement: '',
   neighborhood: '',
   city: '',
   state: '',
@@ -124,6 +127,7 @@ function normalizeResult(raw: any): NewsAnalysisResult {
   const location = applyCrossStreetRule({
     street: String(loc.street ?? '').trim(),
     number: String(loc.number ?? '').trim(),
+    complement: String(loc.complement ?? '').trim(),
     neighborhood: String(loc.neighborhood ?? '').trim(),
     city: String(loc.city ?? '').trim(),
     state: String(loc.state ?? '').trim(),
@@ -144,7 +148,14 @@ function normalizeResult(raw: any): NewsAnalysisResult {
 
 /** Monta o endereço legível completo a partir da localização extraída. */
 export function formatLocation(location: NewsLocation): string {
-  return [location.street, location.number, location.neighborhood, location.city, location.state]
+  return [
+    location.street,
+    location.number,
+    location.complement,
+    location.neighborhood,
+    location.city,
+    location.state,
+  ]
     .filter(Boolean)
     .join(', ');
 }

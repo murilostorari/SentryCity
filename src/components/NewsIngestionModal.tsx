@@ -43,9 +43,17 @@ const inputClass = (isDarkMode: boolean) =>
     isDarkMode ? 'bg-[#2C2C2C] border-[#444] focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'
   }`;
 
+const tabClass = (isDarkMode: boolean, active: boolean) =>
+  `flex-1 py-2.5 text-sm font-medium transition-colors rounded-lg ${
+    active
+      ? isDarkMode ? 'bg-[#2A2A2A] text-white' : 'bg-gray-100 text-gray-900'
+      : isDarkMode ? 'text-[#888888] hover:text-white' : 'text-gray-500 hover:text-gray-900'
+  }`;
+
 const emptyLoc = (): NewsLocation => ({
   street: '',
   number: '',
+  complement: '',
   neighborhood: '',
   city: '',
   state: '',
@@ -54,12 +62,15 @@ const emptyLoc = (): NewsLocation => ({
   reference: '',
 });
 
+type Tab = 'general' | 'address';
+
 export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: NewsIngestionModalProps) {
   const [newsText, setNewsText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<NewsIngestionResult | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('general');
 
   // Campos editáveis do preview
   const [title, setTitle] = useState('');
@@ -253,6 +264,18 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               </button>
             </div>
 
+            {/* Abas */}
+            <div className={`flex gap-1 p-1 rounded-lg ${isDarkMode ? 'bg-[#1A1A1A]' : 'bg-gray-50'} border ${isDarkMode ? 'border-[#2C2C2C]' : 'border-gray-200'}`}>
+              <button type="button" onClick={() => setActiveTab('general')} className={tabClass(isDarkMode, activeTab === 'general')}>
+                Dados Gerais
+              </button>
+              <button type="button" onClick={() => setActiveTab('address')} className={tabClass(isDarkMode, activeTab === 'address')}>
+                Endereço
+              </button>
+            </div>
+
+            {activeTab === 'general' ? (
+              <>
             <div>
               <label className="block text-sm font-medium mb-1 opacity-70">Título</label>
               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass(isDarkMode)} />
@@ -333,28 +356,20 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1">
-                <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
-                <input type="text" value={loc.city} onChange={(e) => setLocField('city', e.target.value)} className={inputClass(isDarkMode)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 opacity-70">Estado</label>
-                <input type="text" value={loc.state} onChange={(e) => setLocField('state', e.target.value)} className={inputClass(isDarkMode)} placeholder="SP" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 opacity-70">Confiança (%)</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={Math.round(confidence * 100)}
-                  onChange={(e) => setConfidence(Number(e.target.value) / 100)}
-                  className={inputClass(isDarkMode)}
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">Confiança (%)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={Math.round(confidence * 100)}
+                onChange={(e) => setConfidence(Number(e.target.value) / 100)}
+                className={inputClass(isDarkMode)}
+              />
             </div>
-
+              </>
+            ) : (
+              <>
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1 opacity-70">Logradouro</label>
@@ -366,14 +381,30 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1">
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">Complemento</label>
+              <input type="text" value={loc.complement} onChange={(e) => setLocField('complement', e.target.value)} className={inputClass(isDarkMode)} placeholder="Apto, bloco, lote..." />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <label className="block text-sm font-medium mb-1 opacity-70">Bairro</label>
                 <input type="text" value={loc.neighborhood} onChange={(e) => setLocField('neighborhood', e.target.value)} className={inputClass(isDarkMode)} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 opacity-70">CEP</label>
                 <input type="text" value={loc.zip_code} onChange={(e) => setLocField('zip_code', e.target.value)} className={inputClass(isDarkMode)} placeholder="00000-000" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
+                <input type="text" value={loc.city} onChange={(e) => setLocField('city', e.target.value)} className={inputClass(isDarkMode)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-70">Estado</label>
+                <input type="text" value={loc.state} onChange={(e) => setLocField('state', e.target.value)} className={inputClass(isDarkMode)} placeholder="SP" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 opacity-70">Cruzamento</label>
@@ -385,6 +416,8 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               <label className="block text-sm font-medium mb-1 opacity-70">Ponto de referência</label>
               <input type="text" value={loc.reference} onChange={(e) => setLocField('reference', e.target.value)} className={inputClass(isDarkMode)} placeholder="Próximo ao..." />
             </div>
+              </>
+            )}
 
             {error && (
               <p className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
