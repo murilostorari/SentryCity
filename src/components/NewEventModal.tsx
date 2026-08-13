@@ -10,17 +10,31 @@ interface NewEventModalProps {
   isDarkMode: boolean;
 }
 
+type Tab = 'general' | 'address';
+
+const tabClass = (isDarkMode: boolean, active: boolean) =>
+  `flex-1 py-2.5 text-sm font-medium transition-colors rounded-lg ${
+    active
+      ? isDarkMode ? 'bg-[#2A2A2A] text-white' : 'bg-gray-100 text-gray-900'
+      : isDarkMode ? 'text-[#888888] hover:text-white' : 'text-gray-500 hover:text-gray-900'
+  }`;
+
 export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [street, setStreet] = useState('');
+  const [number, setNumber] = useState('');
+  const [complement, setComplement] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  const [zipCode, setZipCode] = useState('');
   const [type, setType] = useState('accident');
   const [severity, setSeverity] = useState('medium');
   const [coordinates, setCoordinates] = useState<{ lat: number, lng: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('general');
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLFormElement>(null);
@@ -102,11 +116,13 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
     setShowStreetSuggestions(false);
 
     const addr = suggestion.address || {};
-    // Auto-fill city if available and empty
+    // Auto-fill address details if available and empty
+    if (addr.house_number) setNumber(addr.house_number);
+    if (addr.suburb || addr.neighbourhood) setNeighborhood(addr.suburb || addr.neighbourhood);
+    if (addr.postcode) setZipCode(addr.postcode);
     if (!city && (addr.city || addr.town || addr.village)) {
       setCity(addr.city || addr.town || addr.village);
     }
-    // Auto-fill state (sigla) if available and empty
     if (!state && (addr['ISO3166-2-lvl4'] || addr.state)) {
       setState((addr['ISO3166-2-lvl4']?.split('-')[1]) || addr.state || '');
     }
@@ -134,7 +150,8 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
 
       // Sem coordenadas de uma sugestão, geocodifica o endereço completo.
       if (finalLat == null || finalLng == null) {
-        const result = await geocodeAddress(`${street}, ${city}`);
+        const query = [street, neighborhood, city].filter(Boolean).join(', ');
+        const result = await geocodeAddress(query);
         if (!result) {
           setSubmitError(
             'Não foi possível localizar esse endereço. Selecione uma sugestão ou verifique os dados.'
@@ -157,8 +174,12 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
         lat: finalLat,
         lng: finalLng,
         address: street,
+        number,
+        complement,
+        neighborhood,
         city: resolvedCity,
         state: resolvedState,
+        zip_code: zipCode,
       });
     } catch (error: any) {
       console.error('Falha ao salvar evento:', error);
@@ -197,6 +218,10 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
     setActiveDropdown(activeDropdown === name ? null : name);
   };
 
+  const inputClass = `w-full px-3 py-2 rounded-lg border outline-none transition-colors ${
+    isDarkMode ? 'bg-[#2C2C2C] border-[#444] focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'
+  }`;
+
   return (
     <ResponsiveModal isOpen={true} onClose={onClose} className="max-w-md" isDarkMode={isDarkMode}>
       <div className={`flex items-center justify-between p-4 border-b shrink-0 ${isDarkMode ? 'border-[#333]' : 'border-gray-200'}`}>
@@ -210,176 +235,248 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
       </div>
 
       <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto flex-1 no-scrollbar" ref={dropdownRef}>
-        <div>
-          <label className="block text-sm font-medium mb-1 opacity-70">Título</label>
-          <input
-            type="text"
-            required
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'} outline-none transition-colors`}
-            placeholder="Ex: Acidente na via principal"
-          />
+        {/* Abas */}
+        <div className={`flex gap-1 p-1 rounded-lg ${isDarkMode ? 'bg-[#1A1A1A]' : 'bg-gray-50'} border ${isDarkMode ? 'border-[#2C2C2C]' : 'border-gray-200'}`}>
+          <button type="button" onClick={() => setActiveTab('general')} className={tabClass(isDarkMode, activeTab === 'general')}>
+            Dados Gerais
+          </button>
+          <button type="button" onClick={() => setActiveTab('address')} className={tabClass(isDarkMode, activeTab === 'address')}>
+            Endereço
+          </button>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1 opacity-70">Descrição</label>
-          <textarea
-            required
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'} outline-none transition-colors`}
-            placeholder="Descreva o evento..."
-          />
-        </div>
+        {activeTab === 'general' ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">Título</label>
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className={inputClass}
+                placeholder="Ex: Acidente na via principal"
+              />
+            </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="relative">
-            <label className="block text-sm font-medium mb-1 opacity-70">Rua</label>
-            <input
-              type="text"
-              required
-              value={street}
-              onChange={handleStreetChange}
-              className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'} outline-none transition-colors`}
-              placeholder="Nome da rua"
-            />
-            <AnimatePresence>
-              {showStreetSuggestions && streetSuggestions.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">Descrição</label>
+              <textarea
+                required
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                className={`${inputClass} resize-none`}
+                placeholder="Descreva o evento..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="relative">
+                <label className="block text-sm font-medium mb-1 opacity-70">Tipo</label>
+                <button
+                  type="button"
+                  onClick={() => toggleDropdown('type')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] hover:bg-[#333]' : 'bg-white border-gray-300 hover:bg-gray-50'} transition-colors`}
                 >
-                  {streetSuggestions.map((suggestion, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => selectStreet(suggestion)}
-                      className={`w-full text-left px-3 py-2 text-xs rounded-md truncate flex items-center gap-2 ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
+                  <span>{translateType(type)}</span>
+                  <ChevronDown size={16} className={`transition-transform ${activeDropdown === 'type' ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {activeDropdown === 'type' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className={`absolute top-full mt-2 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
                     >
-                      <MapPin size={12} className="shrink-0 opacity-50" />
-                      {suggestion.display_name}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          <div className="relative">
-            <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
-            <input
-              type="text"
-              required
-              value={city}
-              onChange={handleCityChange}
-              className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'} outline-none transition-colors`}
-              placeholder="Nome da cidade"
-            />
-            <AnimatePresence>
-              {showCitySuggestions && citySuggestions.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                      {['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'].map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => {
+                            setType(t);
+                            setActiveDropdown(null);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md capitalize ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
+                        >
+                          <span>{translateType(t)}</span>
+                          {type === t && <Check size={14} className="text-blue-500" />}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="relative">
+                <label className="block text-sm font-medium mb-1 opacity-70">Severidade</label>
+                <button
+                  type="button"
+                  onClick={() => toggleDropdown('severity')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] hover:bg-[#333]' : 'bg-white border-gray-300 hover:bg-gray-50'} transition-colors`}
                 >
-                  {citySuggestions.map((suggestion, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => selectCity(suggestion)}
-                      className={`w-full text-left px-3 py-2 text-xs rounded-md truncate flex items-center gap-2 ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
+                  <span>{translateSeverity(severity)}</span>
+                  <ChevronDown size={16} className={`transition-transform ${activeDropdown === 'severity' ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {activeDropdown === 'severity' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className={`absolute top-full mt-2 left-0 w-full rounded-lg shadow-xl p-1 z-[60] ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
                     >
-                      <MapPin size={12} className="shrink-0 opacity-50" />
-                      {suggestion.display_name}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+                      {['low', 'medium', 'high', 'critical'].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => {
+                            setSeverity(s);
+                            setActiveDropdown(null);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md capitalize ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
+                        >
+                          <span>{translateSeverity(s)}</span>
+                          {severity === s && <Check size={14} className="text-blue-500" />}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">CEP</label>
+              <input
+                type="text"
+                value={zipCode}
+                onChange={(e) => setZipCode(e.target.value)}
+                className={inputClass}
+                placeholder="00000-000"
+              />
+            </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="relative">
-            <label className="block text-sm font-medium mb-1 opacity-70">Tipo</label>
-            <button
-              type="button"
-              onClick={() => toggleDropdown('type')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] hover:bg-[#333]' : 'bg-white border-gray-300 hover:bg-gray-50'} transition-colors`}
-            >
-              <span>{translateType(type)}</span>
-              <ChevronDown size={16} className={`transition-transform ${activeDropdown === 'type' ? 'rotate-180' : ''}`} />
-            </button>
-
-            <AnimatePresence>
-              {activeDropdown === 'type' && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className={`absolute top-full mt-2 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
-                >
-                  {['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => {
-                        setType(t);
-                        setActiveDropdown(null);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md capitalize ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2 relative">
+                <label className="block text-sm font-medium mb-1 opacity-70">Endereço</label>
+                <input
+                  type="text"
+                  required
+                  value={street}
+                  onChange={handleStreetChange}
+                  className={inputClass}
+                  placeholder="Nome da rua"
+                />
+                <AnimatePresence>
+                  {showStreetSuggestions && streetSuggestions.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
                     >
-                      <span>{translateType(t)}</span>
-                      {type === t && <Check size={14} className="text-blue-500" />}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                      {streetSuggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => selectStreet(suggestion)}
+                          className={`w-full text-left px-3 py-2 text-xs rounded-md truncate flex items-center gap-2 ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
+                        >
+                          <MapPin size={12} className="shrink-0 opacity-50" />
+                          {suggestion.display_name}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-70">Número</label>
+                <input
+                  type="text"
+                  value={number}
+                  onChange={(e) => setNumber(e.target.value)}
+                  className={inputClass}
+                  placeholder="123"
+                />
+              </div>
+            </div>
 
-          <div className="relative">
-            <label className="block text-sm font-medium mb-1 opacity-70">Severidade</label>
-            <button
-              type="button"
-              onClick={() => toggleDropdown('severity')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] hover:bg-[#333]' : 'bg-white border-gray-300 hover:bg-gray-50'} transition-colors`}
-            >
-              <span>{translateSeverity(severity)}</span>
-              <ChevronDown size={16} className={`transition-transform ${activeDropdown === 'severity' ? 'rotate-180' : ''}`} />
-            </button>
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">Complemento</label>
+              <input
+                type="text"
+                value={complement}
+                onChange={(e) => setComplement(e.target.value)}
+                className={inputClass}
+                placeholder="Apto, bloco, lote..."
+              />
+            </div>
 
-            <AnimatePresence>
-              {activeDropdown === 'severity' && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className={`absolute top-full mt-2 left-0 w-full rounded-lg shadow-xl p-1 z-[60] ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
-                >
-                  {['low', 'medium', 'high', 'critical'].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => {
-                        setSeverity(s);
-                        setActiveDropdown(null);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md capitalize ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">Bairro</label>
+              <input
+                type="text"
+                value={neighborhood}
+                onChange={(e) => setNeighborhood(e.target.value)}
+                className={inputClass}
+                placeholder="Nome do bairro"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2 relative">
+                <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
+                <input
+                  type="text"
+                  required
+                  value={city}
+                  onChange={handleCityChange}
+                  className={inputClass}
+                  placeholder="Nome da cidade"
+                />
+                <AnimatePresence>
+                  {showCitySuggestions && citySuggestions.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
                     >
-                      <span>{translateSeverity(s)}</span>
-                      {severity === s && <Check size={14} className="text-blue-500" />}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+                      {citySuggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => selectCity(suggestion)}
+                          className={`w-full text-left px-3 py-2 text-xs rounded-md truncate flex items-center gap-2 ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
+                        >
+                          <MapPin size={12} className="shrink-0 opacity-50" />
+                          {suggestion.display_name}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-70">Estado</label>
+                <input
+                  type="text"
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                  className={inputClass}
+                  placeholder="SP"
+                />
+              </div>
+            </div>
+          </>
+        )}
 
         {submitError && (
           <p className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
