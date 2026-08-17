@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Loader2, Sparkles, Newspaper, MapPin, Check, ChevronDown, FileText, Save, AlertTriangle, RefreshCw } from 'lucide-react';
+import { X, Loader2, Sparkles, Newspaper, MapPin, Check, ChevronDown, Save, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ResponsiveModal from './ResponsiveModal';
 import ModalTabs from './ModalTabs';
@@ -120,6 +120,9 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
       if (geo) {
         setLat(geo.lat);
         setLng(geo.lng);
+        if (!loc.zip_code && geo.zipCode) {
+          setLoc((prev) => ({ ...prev, zip_code: geo.zipCode || '' }));
+        }
       } else {
         setError('Não foi possível geocodificar o endereço. Verifique os dados.');
       }
@@ -245,11 +248,6 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
           </>
         ) : (
           <>
-            <div className={`flex items-start gap-2 text-sm rounded-lg px-3 py-2 ${isDarkMode ? 'bg-[#172554] text-blue-300' : 'bg-blue-50 text-blue-700'} border ${isDarkMode ? 'border-[#1E3A8A]' : 'border-blue-200'}`}>
-              <FileText size={16} className="shrink-0 mt-0.5" />
-              <span>Analisado com {result.model}. Revise os dados antes de confirmar.</span>
-            </div>
-
             {!result.aiAnalyzed && (
               <div className={`flex items-start gap-2 text-sm rounded-lg px-3 py-2 ${isDarkMode ? 'bg-[#3A2D1D] text-amber-300' : 'bg-amber-50 text-amber-700'} border ${isDarkMode ? 'border-[#4A3A1D]' : 'border-amber-200'}`}>
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" />
@@ -257,34 +255,21 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               </div>
             )}
 
-            {/* MODO REVISÃO: local encontrado + coordenadas */}
-            <div className={`rounded-xl border p-3 space-y-2 ${lat != null && lng != null ? (isDarkMode ? 'bg-[#0F1F17] border-[#1E4D35]' : 'bg-green-50 border-green-200') : (isDarkMode ? 'bg-[#3A2D1D] border-[#4A3A1D]' : 'bg-amber-50 border-amber-200')}`}>
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <MapPin size={15} className={isDarkMode ? 'text-green-400' : 'text-green-600'} />
-                <span>Local encontrado</span>
-              </div>
-              <div className="text-sm">
-                <span className={isDarkMode ? 'text-green-300' : 'text-green-800'}>{formatLocation(loc) || '—'}</span>
-              </div>
-              {result.geocodeAddress && (
-                <div className="text-xs opacity-60 truncate" title={result.geocodeAddress}>
-                  {result.geocodeAddress}
-                </div>
-              )}
-              {lat != null && lng != null && (
-                <div className="text-xs opacity-70">
-                  Coordenadas: {lat.toFixed(6)}, {lng.toFixed(6)}
-                </div>
-              )}
-              {lat == null && (
-                <div className="text-xs opacity-70">
-                  Coordenadas não encontradas — ajuste os campos abaixo e clique em Localizar.
-                </div>
+            {/* Status da localização (discreto) */}
+            <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 border ${lat != null && lng != null ? (isDarkMode ? 'bg-[#0F1F17] border-[#1E4D35] text-green-400' : 'bg-green-50 border-green-200 text-green-700') : (isDarkMode ? 'bg-[#3A2D1D] border-[#4A3A1D] text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700')}`}>
+              <MapPin size={14} className="shrink-0" />
+              {lat != null && lng != null ? (
+                <span className="truncate">
+                  {formatLocation(loc) || 'Local encontrado'}{' '}
+                  <span className="opacity-60">({lat.toFixed(5)}, {lng.toFixed(5)})</span>
+                </span>
+              ) : (
+                <span>Localização não encontrada. Ajuste o endereço e clique em Localizar.</span>
               )}
               <button
                 onClick={handleRegeocode}
                 disabled={isRegeocoding}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-medium transition-colors"
+                className="ml-auto shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-medium transition-colors"
               >
                 {isRegeocoding ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                 Localizar
@@ -384,16 +369,14 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1 opacity-70">Confiança (%)</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={Math.round(confidence * 100)}
-                onChange={(e) => setConfidence(Number(e.target.value) / 100)}
-                className={inputClass(isDarkMode)}
-              />
+            <div className={`flex items-center justify-between text-sm rounded-lg px-3 py-2 ${isDarkMode ? 'bg-[#1A1A1A] text-[#888888]' : 'bg-gray-50 text-gray-500'}`}>
+              <span className="flex items-center gap-2">
+                <Sparkles size={14} />
+                Confiança da análise
+              </span>
+              <span className={`font-bold ${confidence >= 0.7 ? 'text-green-500' : confidence >= 0.4 ? 'text-amber-500' : 'text-red-500'}`}>
+                {Math.round(confidence * 100)}%
+              </span>
             </div>
               </>
             ) : (
@@ -438,18 +421,14 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               <input type="text" value={loc.neighborhood} onChange={(e) => setLocField('neighborhood', e.target.value)} className={inputClass(isDarkMode)} placeholder="Nome do bairro" />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
                 <input type="text" value={loc.city} onChange={(e) => setLocField('city', e.target.value)} className={inputClass(isDarkMode)} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 opacity-70">Estado</label>
                 <input type="text" value={loc.state} onChange={(e) => setLocField('state', e.target.value)} className={inputClass(isDarkMode)} placeholder="SP" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 opacity-70">Cruzamento</label>
-                <input type="text" value={loc.cross_street} onChange={(e) => setLocField('cross_street', e.target.value)} className={inputClass(isDarkMode)} placeholder="Rua transversal" />
               </div>
             </div>
 

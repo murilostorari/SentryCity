@@ -12,6 +12,7 @@
  */
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
+const PHOTON_BASE = 'https://photon.komoot.io/api';
 
 export interface GeocodeResult {
   lat: number;
@@ -20,6 +21,7 @@ export interface GeocodeResult {
   address: string;
   city: string;
   state: string;
+  zipCode?: string;
 }
 
 export interface GeocodeSuggestion {
@@ -56,46 +58,93 @@ export async function fetchByCep(cep: string): Promise<ViaCepResult | null> {
   }
 }
 
-/** Extrai cidade/estado do bloco `address` do Nominatim de forma resiliente. */
-function extractCityState(addr: any): { city: string; state: string } {
-  if (!addr) return { city: '', state: '' };
+/** Extrai cidade/estado/cep do bloco `address` do Nominatim de forma resiliente. */
+function extractCityState(addr: any): { city: string; state: string; zipCode: string } {
+  if (!addr) return { city: '', state: '', zipCode: '' };
   const city =
     addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
   const state = addr.state || addr.region || '';
-  return { city, state };
+  const zipCode = addr.postcode || '';
+  return { city, state, zipCode };
 }
 
-/**
- * Geocodifica um endereço textual completo. Retorna o primeiro resultado ou
- * `null` quando nada é encontrado.
- */
-export async function geocodeAddress(query: string): Promise<GeocodeResult | null> {
-  if (!query || query.trim().length < 3) return null;
-
+/** Tenta geocodificar via Nominatim com retry simples em rate limit (429). */
+async function geocodeWithNominatim(query: string): Promise<GeocodeResult | null> {
   const url =
     `${NOMINATIM_BASE}/search?format=json&addressdetails=1&limit=1&countrycodes=br` +
     `&q=${encodeURIComponent(query)}`;
 
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (res.status === 429) {
+        // Rate limit: espera antes de tentar de novo.
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) return null;
+
+      const first = data[0];
+      const { city, state, zipCode } = extractCityState(first.address);
+      return {
+        lat: parseFloat(first.lat),
+        lng: parseFloat(first.lon),
+        displayName: first.display_name,
+        address: first.display_name,
+        city,
+        state,
+        zipCode: zipCode || undefined,
+      };
+    } catch (error) {
+      console.warn('geocodeWithNominatim falhou (tentativa ' + (attempt + 1) + '):', error);
+    }
+  }
+  return null;
+}
+
+/** Fallback: Photon (komoot). Não tem countrycodes, mas encontra endereços brasileiros. */
+async function geocodeWithPhoton(query: string): Promise<GeocodeResult | null> {
+  const url = `${PHOTON_BASE}?limit=1&q=${encodeURIComponent(query)}`;
   try {
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`Nominatim respondeu ${res.status}`);
+    if (!res.ok) return null;
     const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return null;
+    const feature = data?.features?.[0];
+    if (!feature) return null;
 
-    const first = data[0];
-    const { city, state } = extractCityState(first.address);
+    const props = feature.properties || {};
+    const [lng, lat] = feature.geometry?.coordinates ?? [];
+    if (lat == null || lng == null) return null;
+
     return {
-      lat: parseFloat(first.lat),
-      lng: parseFloat(first.lon),
-      displayName: first.display_name,
-      address: first.display_name,
-      city,
-      state,
+      lat,
+      lng,
+      displayName: props.name || query,
+      address: props.name || query,
+      city: props.city || props.state || '',
+      state: props.state || '',
+      zipCode: props.postcode || undefined,
     };
   } catch (error) {
-    console.error('geocodeAddress falhou:', error);
+    console.warn('geocodeWithPhoton falhou:', error);
     return null;
   }
+}
+
+/**
+ * Geocodifica um endereço textual completo. Retorna o primeiro resultado ou
+ * `null` quando nada é encontrado. Tenta Nominatim e cai para Photon como
+ * fallback (evita o erro "Não foi possível geocodificar" em falhas da primeira).
+ */
+export async function geocodeAddress(query: string): Promise<GeocodeResult | null> {
+  if (!query || query.trim().length < 3) return null;
+
+  const nominatimResult = await geocodeWithNominatim(query);
+  if (nominatimResult) return nominatimResult;
+
+  return geocodeWithPhoton(query);
 }
 
 /**

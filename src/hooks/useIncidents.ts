@@ -50,6 +50,7 @@ export function useIncidents() {
       address: eventData.address,
       city: eventData.city,
       state: eventData.state,
+      zip_code: eventData.zip_code,
       confidence_score: eventData.confidence_score,
     };
 

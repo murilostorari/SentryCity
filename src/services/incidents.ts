@@ -22,6 +22,7 @@ export interface IncidentRow {
   address: string | null;
   city: string | null;
   state: string | null;
+  zip_code: string | null;
   confidence_score: number | null;
   reported_at: string | null;
   resolved_at: string | null;
@@ -43,6 +44,7 @@ export interface CreateIncidentInput {
   address?: string;
   city?: string;
   state?: string;
+  zip_code?: string;
   confidence_score?: number;
   created_by?: string;
 }
@@ -134,6 +136,7 @@ export async function createIncident(input: CreateIncidentInput): Promise<Incide
     address: input.address ?? null,
     city: input.city ?? null,
     state: input.state ?? null,
+    zip_code: input.zip_code ?? null,
     confidence_score: input.confidence_score ?? 0,
     created_by: createdBy,
     reported_at: new Date().toISOString(),

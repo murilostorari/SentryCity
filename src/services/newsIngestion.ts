@@ -131,6 +131,10 @@ async function runIngestion({ text, originalUrl }: IngestInput): Promise<NewsIng
       lat = geo.lat;
       lng = geo.lng;
       displayName = geo.displayName;
+      // Preenche o CEP a partir do geocoding quando a IA não retornou.
+      if (analysis && !analysis.location.zip_code && geo.zipCode) {
+        analysis.location.zip_code = geo.zipCode;
+      }
     }
   }
   const geocodeMs = performance.now() - tGeo;
@@ -223,6 +227,7 @@ async function createIncidentFromIngestion(input: ConfirmIngestionInput): Promis
       address: formatLocation(loc),
       city: loc.city || null,
       state: loc.state || null,
+      zip_code: loc.zip_code || null,
       confidence_score: input.analysis.confidence_score,
       created_by: createdBy,
       reported_at: new Date().toISOString(),
