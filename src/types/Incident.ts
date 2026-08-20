@@ -66,6 +66,7 @@ export interface Incident {
   title: string;
   description: string;
   address: string;
+  source?: string | null;
   time: string;
   radius: number;
   timestamp: number;

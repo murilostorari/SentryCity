@@ -42,6 +42,7 @@ export interface ConfirmIngestionInput {
   rawReportId: string;
   analysis: NewsAnalysisResult;
   model: string;
+  source?: string;
   lat: number;
   lng: number;
   address: string;
@@ -228,6 +229,7 @@ async function createIncidentFromIngestion(input: ConfirmIngestionInput): Promis
       city: loc.city || null,
       state: loc.state || null,
       zip_code: loc.zip_code || null,
+      source: input.source ?? null,
       confidence_score: input.analysis.confidence_score,
       created_by: createdBy,
       reported_at: new Date().toISOString(),
@@ -255,10 +257,12 @@ function mapIngestionRow(row: IncidentRow): Incident {
     title: row.title,
     description: row.description ?? '',
     address: [row.address, row.city, row.state].filter(Boolean).join(', '),
+    source: row.source,
     time: new Date(row.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     radius: 100,
     timestamp,
     resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
     expiresAt: row.expires_at ? new Date(row.expires_at).getTime() : null,
+    created_by: row.created_by,
   };
 }

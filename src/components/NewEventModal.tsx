@@ -194,6 +194,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
         type,
         severity,
         status: 'active',
+        source: 'Manual',
         lat: finalLat,
         lng: finalLng,
         address: street,

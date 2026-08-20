@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, XCircle as XCircleIcon, Shield as ShieldIcon, Edit3, User as UserIcon, Star } from 'lucide-react';
+import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, Edit3, User as UserIcon } from 'lucide-react';
 import { BarChart, Bar, ResponsiveContainer, AreaChart, Area, CartesianGrid, YAxis } from 'recharts';
 import { Incident, ReportCounts, TimelineItem, ReportType, HourlyFrequencyData, ConfidenceDetails } from '../types/Incident';
 import { useIncidentReports, getReportTypeLabel as getReportTypeLabelFn, getReportTypeStyle as getReportTypeStyleFn, formatRelativeTime as formatRelativeTimeFn } from '../hooks/useIncidentReports';
@@ -69,6 +69,61 @@ export default function StationDetails({
     }
   };
 
+  const translateType = (t: string) => {
+    switch(t) {
+      case 'accident': return 'Acidente';
+      case 'power': return 'Energia';
+      case 'weather': return 'Clima';
+      case 'pothole': return 'Buraco';
+      case 'show': return 'Show/Concerto';
+      case 'party': return 'Festa/Evento';
+      case 'noise': return 'Barulho/Reclamação';
+      case 'inauguration': return 'Inauguração';
+      case 'other': return 'Outro';
+      default: return t;
+    }
+  };
+
+  const translateStatus = (s: string) => {
+    switch(s) {
+      case 'active': return 'Ativo';
+      case 'pending': return 'Pendente';
+      case 'resolved': return 'Resolvido';
+      case 'dismissed': return 'Descartado';
+      default: return s;
+    }
+  };
+
+  const getSeverityHex = (sev: string) => {
+    switch(sev) {
+      case 'critical': return '#EF4444';
+      case 'high': return '#F97316';
+      case 'medium': return '#F59E0B';
+      case 'low': return '#10B981';
+      default: return '#6B7280';
+    }
+  };
+
+  const getSeverityTextColor = (sev: string) => {
+    switch(sev) {
+      case 'critical': return 'text-red-600 dark:text-[#EF4444]';
+      case 'high': return 'text-orange-600 dark:text-[#F97316]';
+      case 'medium': return 'text-yellow-600 dark:text-[#F59E0B]';
+      case 'low': return 'text-green-600 dark:text-[#10B981]';
+      default: return 'text-gray-600 dark:text-[#888888]';
+    }
+  };
+
+  const getSeverityDotColor = (sev: string) => {
+    switch(sev) {
+      case 'critical': return 'bg-red-600 dark:bg-[#EF4444]';
+      case 'high': return 'bg-orange-600 dark:bg-[#F97316]';
+      case 'medium': return 'bg-yellow-600 dark:bg-[#F59E0B]';
+      case 'low': return 'bg-green-600 dark:bg-[#10B981]';
+      default: return 'bg-gray-600 dark:bg-[#888888]';
+    }
+  };
+
   const isCreator = user && incident.created_by && user.id === incident.created_by;
 
   const openReportModal = (type: ReportType) => {
@@ -115,12 +170,6 @@ export default function StationDetails({
           </button>
         </div>
 
-        {/* Report Counters - Inline style like action buttons */}
-        <ReportCounters counts={counts} />
-
-        {/* Confidence Display */}
-        <ConfidenceDisplay confidence={confidence} onRefresh={refreshConfidence} />
-
         {/* Tabs */}
         <div className="flex items-center gap-6 border-b border-gray-200 dark:border-[#2C2C2C]">
           <Tab label="Detalhes" active={activeTab === 'Detalhes'} onClick={() => setActiveTab('Detalhes')} />
@@ -131,16 +180,25 @@ export default function StationDetails({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-5 no-scrollbar">
+        {/* Confidence Display - abaixo das abas */}
+        <ConfidenceDisplay confidence={confidence} onRefresh={refreshConfidence} />
+
         {activeTab === 'Detalhes' && <DetailsTab 
           incident={incident} 
           translateSeverity={translateSeverity} 
+          translateType={translateType}
+          translateStatus={translateStatus}
+          getSeverityTextColor={getSeverityTextColor}
+          getSeverityDotColor={getSeverityDotColor}
+          getSeverityHex={getSeverityHex}
           onReportClick={openReportModal}
           hourlyFrequency={hourlyFrequency}
           isCreator={isCreator}
-          profile={profile}
         />}
         {activeTab === 'Linha do Tempo' && <TimelineTab 
           timeline={timeline} 
+          counts={counts}
+          severityHex={getSeverityHex(incident.severity)}
           isLoading={isLoading} 
           onRefresh={refresh}
         />}
@@ -217,33 +275,6 @@ export default function StationDetails({
   );
 }
 
-function ReportCounters({ counts }: { counts: ReportCounts }) {
-  const counterStyles = [
-    { key: 'confirm' as keyof ReportCounts, label: 'Confirmam', icon: <CheckCircle size={14} />, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-900/30' },
-    { key: 'deny' as keyof ReportCounts, label: 'Negam', icon: <XCircleIcon size={14} />, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-900/30' },
-    { key: 'resolved' as keyof ReportCounts, label: 'Resolvem', icon: <ShieldIcon size={14} />, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-900/30' },
-    { key: 'total' as keyof ReportCounts, label: 'Total', icon: <MessageSquare size={14} />, color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-700' },
-  ];
-
-  return (
-    <div className="mb-4 flex flex-wrap gap-2">
-      {counterStyles.map(({ key, label, icon, color, bg, border }) => (
-        <button
-          key={key}
-          type="button"
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${border} ${bg} ${color} hover:opacity-80 transition-opacity text-sm`}
-          disabled
-          aria-label={`${counts[key]} ${label}`}
-        >
-          <span className="w-5 h-5 flex items-center justify-center">{icon}</span>
-          <span className="font-medium">{counts[key]}</span>
-          <span className="text-xs opacity-70">{label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function ConfidenceDisplay({ confidence, onRefresh }: { confidence: ConfidenceDetails | null; onRefresh: () => void }) {
   if (!confidence) return null;
 
@@ -304,17 +335,25 @@ function Tab({ label, active, badge, onClick }: any) {
 function DetailsTab({ 
   incident, 
   translateSeverity, 
+  translateType,
+  translateStatus,
+  getSeverityTextColor,
+  getSeverityDotColor,
+  getSeverityHex,
   onReportClick, 
   hourlyFrequency,
-  isCreator,
-  profile
+  isCreator
 }: { 
   incident: Incident, 
   translateSeverity: (s: string) => string, 
+  translateType: (s: string) => string,
+  translateStatus: (s: string) => string,
+  getSeverityTextColor: (s: string) => string,
+  getSeverityDotColor: (s: string) => string,
+  getSeverityHex: (s: string) => string,
   onReportClick: (type: ReportType) => void, 
   hourlyFrequency: HourlyFrequencyData[],
-  isCreator: boolean,
-  profile: Profile | null
+  isCreator: boolean
 }) {
   return (
     <div className="space-y-6">
@@ -334,7 +373,7 @@ function DetailsTab({
         <div className="h-[140px] w-full relative">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={hourlyFrequency} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <Bar dataKey="count" fill="#EF4444" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="count" fill={getSeverityHex(incident.severity)} radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <div className="flex justify-between text-xs text-gray-400 dark:text-[#666666] mt-2">
@@ -347,9 +386,9 @@ function DetailsTab({
       <div>
         <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-4 uppercase">Informações do Incidente</h3>
         <div className="space-y-4">
-          <DetailRow label="Tipo" value={incident.type} />
-          <DetailRow label="Fonte" value="OSINT / Twitter" />
-          <DetailRow label="Status" value={<span className="text-red-600 dark:text-[#EF4444] flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-[#EF4444] animate-pulse"></div>{incident.status}</span>} />
+          <DetailRow label="Tipo" value={translateType(incident.type)} />
+          <DetailRow label="Fonte" value={incident.source || incident.news?.[0]?.source || 'Manual'} />
+          <DetailRow label="Status" value={<span className={`${getSeverityTextColor(incident.severity)} flex items-center gap-1.5`}><div className={`w-1.5 h-1.5 rounded-full ${getSeverityDotColor(incident.severity)} animate-pulse`}></div>{translateStatus(incident.status)}</span>} />
           <DetailRow label="ID" value={<div className="flex items-center justify-between w-full"><span>{incident.id}</span><Copy size={14} className="text-gray-400 dark:text-[#666666] cursor-pointer hover:text-black dark:hover:text-white transition-colors" /></div>} hasInfo />
           <DetailRow label="Severidade" value={translateSeverity(incident.severity)} />
           <DetailRow label="Reportado" value={<span className="flex items-center gap-1.5"><Clock size={14} /> {incident.time}</span>} hasInfo />
@@ -359,22 +398,7 @@ function DetailsTab({
 
       {/* Report Actions */}
       <div className="pt-4 border-t border-gray-200 dark:border-[#2C2C2C]">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider uppercase">Ações</h3>
-{profile && (
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-[#888888]">
-                <UserIcon size={12} />
-              <span>Sua reputação:</span>
-              <span className={`font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-[#2A2A2A] ${
-                profile.reputation_score >= 60 ? 'text-green-600 dark:text-green-400' :
-                profile.reputation_score >= 40 ? 'text-amber-600 dark:text-amber-400' :
-                'text-red-600 dark:text-red-400'
-              }`}>
-                {Math.round(profile.reputation_score)}
-              </span>
-            </div>
-          )}
-        </div>
+        <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-3 uppercase">Ações</h3>
         <div className="flex flex-wrap gap-2">
           {reportActions
             .filter((action) => !(isCreator && (action.type === 'confirm' || action.type === 'deny')))
@@ -406,9 +430,19 @@ function DetailRow({ label, value, hasInfo }: any) {
   );
 }
 
-function TimelineTab({ timeline, isLoading, onRefresh }: { timeline: TimelineItem[]; isLoading: boolean; onRefresh: () => void }) {
+function TimelineTab({ timeline, counts, severityHex, isLoading, onRefresh }: { timeline: TimelineItem[]; counts: ReportCounts; severityHex: string; isLoading: boolean; onRefresh: () => void }) {
   return (
     <div className="space-y-6">
+      <div>
+        <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-4 uppercase">Relatos da Comunidade</h3>
+        <div className="space-y-4">
+          <DetailRow label="Confirmam" value={counts.confirm} />
+          <DetailRow label="Negam" value={counts.deny} />
+          <DetailRow label="Resolvem" value={counts.resolved} />
+          <DetailRow label="Total" value={counts.total} />
+        </div>
+      </div>
+
       <div>
         <div className="flex items-center gap-1.5 mb-4">
           <h3 className="text-sm font-medium text-gray-900 dark:text-white">Tendência de Severidade</h3>
@@ -419,13 +453,13 @@ function TimelineTab({ timeline, isLoading, onRefresh }: { timeline: TimelineIte
             <AreaChart data={severityData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorSeverity" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#EF4444" stopOpacity={0.2}/>
-                  <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
+                  <stop offset="5%" stopColor={severityHex} stopOpacity={0.2}/>
+                  <stop offset="95%" stopColor={severityHex} stopOpacity={0}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" className="dark:stroke-[#2C2C2C]" />
               <YAxis orientation="right" tick={{ fill: '#9CA3AF', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Area type="monotone" dataKey="value" stroke="#EF4444" strokeWidth={2} fillOpacity={1} fill="url(#colorSeverity)" />
+              <Area type="monotone" dataKey="value" stroke={severityHex} strokeWidth={2} fillOpacity={1} fill="url(#colorSeverity)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>

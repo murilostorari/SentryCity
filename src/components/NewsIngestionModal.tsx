@@ -80,6 +80,7 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
   const [type, setType] = useState('other');
   const [severity, setSeverity] = useState('medium');
   const [confidence, setConfidence] = useState(0);
+  const [source, setSource] = useState('');
   const [loc, setLoc] = useState<NewsLocation>(emptyLoc());
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
@@ -167,6 +168,7 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
       const created = await confirmIngestion({
         rawReportId: result.rawReportId,
         model: result.model,
+        source: source.trim() || undefined,
         analysis: {
           title,
           description,
@@ -292,6 +294,11 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
             <div>
               <label className="block text-sm font-medium mb-1 opacity-70">Título</label>
               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass(isDarkMode)} />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1 opacity-70">Fonte</label>
+              <input type="text" value={source} onChange={(e) => setSource(e.target.value)} className={inputClass(isDarkMode)} placeholder="G1, UOL, site da prefeitura..." />
             </div>
 
             <div>

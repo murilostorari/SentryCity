@@ -23,6 +23,7 @@ export interface IncidentRow {
   city: string | null;
   state: string | null;
   zip_code: string | null;
+  source: string | null;
   confidence_score: number | null;
   reported_at: string | null;
   resolved_at: string | null;
@@ -45,6 +46,7 @@ export interface CreateIncidentInput {
   city?: string;
   state?: string;
   zip_code?: string;
+  source?: string;
   confidence_score?: number;
   created_by?: string;
 }
@@ -92,11 +94,13 @@ export function mapRowToIncident(row: IncidentRow): Incident {
     title: row.title,
     description: row.description ?? '',
     address: fullAddress,
+    source: row.source,
     time: formatRelativeTime(timestamp),
     radius: severityToRadius(row.severity),
     timestamp,
     resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
     expiresAt: row.expires_at ? new Date(row.expires_at).getTime() : null,
+    created_by: row.created_by,
   };
 }
 
@@ -137,6 +141,7 @@ export async function createIncident(input: CreateIncidentInput): Promise<Incide
     city: input.city ?? null,
     state: input.state ?? null,
     zip_code: input.zip_code ?? null,
+    source: input.source ?? null,
     confidence_score: input.confidence_score ?? 0,
     created_by: createdBy,
     reported_at: new Date().toISOString(),
