@@ -22,6 +22,8 @@ export interface NewsLocation {
   reference: string;
 }
 
+export type LocationPrecision = 'exact' | 'street' | 'neighborhood' | 'city' | 'unknown';
+
 export interface NewsAnalysisResult {
   title: string;
   description: string;
@@ -29,6 +31,7 @@ export interface NewsAnalysisResult {
   severity: 'low' | 'medium' | 'high' | 'critical';
   confidence_score: number; // 0.0 a 1.0
   location: NewsLocation;
+  location_precision: LocationPrecision;
 }
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -66,7 +69,8 @@ Responda SOMENTE com um objeto JSON válido, sem texto adicional, no formato:
     "zip_code": "CEP, ou vazio se não houver",
     "cross_street": "rua transversal/cruzamento, ou vazio",
     "reference": "ponto de referência próximo (ex: próximo ao mercado, atrás da escola), ou vazio"
-  }
+  },
+  "location_precision": "um de: exact, street, neighborhood, city, unknown"
 }
 
 REGRAS DE LOCALIZAÇÃO:
@@ -74,7 +78,15 @@ REGRAS DE LOCALIZAÇÃO:
   a primeira rua citada (X) é o endereço principal e vai em "street";
   a segunda rua citada (Y) vai em "cross_street".
 - Nunca combine as duas ruas no campo "street".
-- Se a notícia indicar o local apenas por bairro ou ponto de referência, preencha apenas os campos disponíveis.`;
+- Se a notícia indicar o local apenas por bairro ou ponto de referência, preencha apenas os campos disponíveis.
+
+REGRAS DE PRECISÃO (location_precision):
+- "exact": endereço completo com rua + número (ex: "Rua Augusta, 1200, São Paulo")
+- "street": rua mencionada mas sem número (ex: "Rua Tiradentes, bairro Centro")
+- "neighborhood": apenas bairro mencionado (ex: "no bairro da Liberdade")
+- "city": apenas cidade mencionada (ex: "em São Paulo", "na capital")
+- "unknown": nenhum dado de localização confiável (ex: "no interior", "em um hospital não identificado")
+- Se houver ponto de referência específico (hospital, teatro, praça), tente extrair o nome e classifique como "street" ou "neighborhood" conforme o dado disponível.`;
 
 const VALID_TYPES = [
   'accident',
@@ -88,6 +100,7 @@ const VALID_TYPES = [
   'other',
 ];
 const VALID_SEVERITIES = ['low', 'medium', 'high', 'critical'];
+const VALID_PRECISIONS: LocationPrecision[] = ['exact', 'street', 'neighborhood', 'city', 'unknown'];
 
 const emptyLocation = (): NewsLocation => ({
   street: '',
@@ -119,6 +132,8 @@ function applyCrossStreetRule(location: NewsLocation): NewsLocation {
 function normalizeResult(raw: any): NewsAnalysisResult {
   const type = VALID_TYPES.includes(raw?.type) ? raw.type : 'other';
   const severity = VALID_SEVERITIES.includes(raw?.severity) ? raw.severity : 'medium';
+  const location_precision: LocationPrecision =
+    VALID_PRECISIONS.includes(raw?.location_precision) ? raw.location_precision : 'unknown';
   let score = Number(raw?.confidence_score);
   if (!Number.isFinite(score)) score = 0;
   score = Math.min(1, Math.max(0, score));
@@ -143,6 +158,7 @@ function normalizeResult(raw: any): NewsAnalysisResult {
     severity: severity as NewsAnalysisResult['severity'],
     confidence_score: score,
     location,
+    location_precision,
   };
 }
 
@@ -166,6 +182,38 @@ export function buildGeocodeQuery(location: NewsLocation): string {
     .map((p) => p.trim())
     .filter(Boolean)
     .join(', ');
+}
+
+/** Monta a query de geocoding conforme a precisão da localização. */
+export function buildGeocodeQueryByPrecision(
+  location: NewsLocation,
+  precision: LocationPrecision
+): string {
+  switch (precision) {
+    case 'exact':
+      return [location.street, location.number, location.neighborhood, location.city, location.state]
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .join(', ');
+    case 'street':
+      return [location.street, location.neighborhood, location.city, location.state]
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .join(', ');
+    case 'neighborhood':
+      return [location.neighborhood, location.city, location.state]
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .join(', ');
+    case 'city':
+      return [location.city, location.state]
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .join(', ');
+    case 'unknown':
+    default:
+      return '';
+  }
 }
 
 /**

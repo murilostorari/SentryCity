@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { X, Loader2, Sparkles, Newspaper, MapPin, Check, ChevronDown, Save, AlertTriangle, RefreshCw } from 'lucide-react';
+import { X, Loader2, Sparkles, Newspaper, MapPin, Check, ChevronDown, Save, AlertTriangle, RefreshCw, Link } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ResponsiveModal from './ResponsiveModal';
 import ModalTabs from './ModalTabs';
-import { ingestNewsText, confirmIngestion, NewsIngestionResult } from '../services/newsIngestion';
+import { ingestNewsText, ingestNewsUrl, confirmIngestion, NewsIngestionResult } from '../services/newsIngestion';
 import { geocodeAddress, fetchByCep } from '../services/geocoding';
-import { buildGeocodeQuery, formatLocation, NewsLocation } from '../services/newsAnalysis';
+import { buildGeocodeQuery, formatLocation, NewsLocation, LocationPrecision } from '../services/newsAnalysis';
 
 interface NewsIngestionModalProps {
   onClose: () => void;
@@ -39,6 +39,17 @@ const translateSeverity = (s: string) => {
   }
 };
 
+const translatePrecision = (p: LocationPrecision) => {
+  switch (p) {
+    case 'exact': return 'Exato (rua + número)';
+    case 'street': return 'Rua';
+    case 'neighborhood': return 'Bairro';
+    case 'city': return 'Cidade';
+    case 'unknown': return 'Desconhecido';
+    default: return p;
+  }
+};
+
 const inputClass = (isDarkMode: boolean) =>
   `w-full px-3 py-2 rounded-lg border outline-none transition-colors ${
     isDarkMode ? 'bg-[#2C2C2C] border-[#444] focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'
@@ -65,7 +76,9 @@ const emptyLoc = (): NewsLocation => ({
 type Tab = 'general' | 'address';
 
 export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: NewsIngestionModalProps) {
+  const [inputMode, setInputMode] = useState<'text' | 'url'>('text');
   const [newsText, setNewsText] = useState('');
+  const [urlInput, setUrlInput] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +97,7 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
   const [loc, setLoc] = useState<NewsLocation>(emptyLoc());
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+  const [locationPrecision, setLocationPrecision] = useState<LocationPrecision>('unknown');
   const [isRegeocoding, setIsRegeocoding] = useState(false);
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -95,16 +109,21 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
     setError(null);
     setIsAnalyzing(true);
     try {
-      const res = await ingestNewsText(newsText);
+      const res = inputMode === 'url'
+        ? await ingestNewsUrl(urlInput)
+        : await ingestNewsText(newsText);
       setResult(res);
       setTitle(res.analysis.title);
       setDescription(res.analysis.description || res.analysis.title);
       setType(res.analysis.type);
       setSeverity(res.analysis.severity);
       setConfidence(res.analysis.confidence_score);
+      setLocationPrecision(res.analysis.location_precision);
       setLoc(res.analysis.location);
       setLat(res.lat);
       setLng(res.lng);
+      // Preenche fonte da URL automaticamente
+      if (res.sourceName) setSource(res.sourceName);
     } catch (err: any) {
       setError(err?.message ?? 'Falha ao analisar a notícia.');
     } finally {
@@ -175,6 +194,7 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
           type,
           severity: severity as 'low' | 'medium' | 'high' | 'critical',
           confidence_score: confidence,
+          location_precision: locationPrecision,
           location: loc,
         },
         lat,
@@ -214,18 +234,60 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
         {!result ? (
           <>
             <p className="text-sm opacity-70">
-              Cole o texto de uma notícia. A IA extrai os dados do incidente e localiza o endereço antes de criar o registro.
+              Cole o texto ou a URL de uma notícia. A IA extrai os dados do incidente e localiza o endereço.
             </p>
-            <div>
-              <label className="block text-sm font-medium mb-1 opacity-70">Texto da notícia</label>
-              <textarea
-                value={newsText}
-                onChange={(e) => setNewsText(e.target.value)}
-                rows={8}
-                className={`${inputClass(isDarkMode)} resize-none`}
-                placeholder="Cole aqui o texto da notícia..."
-              />
+
+            {/* Toggle Texto / URL */}
+            <div className={`flex rounded-lg border overflow-hidden ${isDarkMode ? 'border-[#444]' : 'border-gray-300'}`}>
+              <button
+                type="button"
+                onClick={() => setInputMode('text')}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  inputMode === 'text'
+                    ? 'bg-blue-600 text-white'
+                    : isDarkMode ? 'bg-[#2C2C2C] text-[#888888] hover:bg-[#333]' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <Newspaper size={14} />
+                Texto
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('url')}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  inputMode === 'url'
+                    ? 'bg-blue-600 text-white'
+                    : isDarkMode ? 'bg-[#2C2C2C] text-[#888888] hover:bg-[#333]' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <Link size={14} />
+                URL
+              </button>
             </div>
+
+            {inputMode === 'text' ? (
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-70">Texto da notícia</label>
+                <textarea
+                  value={newsText}
+                  onChange={(e) => setNewsText(e.target.value)}
+                  rows={8}
+                  className={`${inputClass(isDarkMode)} resize-none`}
+                  placeholder="Cole aqui o texto da notícia..."
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-70">URL da notícia</label>
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  className={inputClass(isDarkMode)}
+                  placeholder="https://g1.globo.com/..."
+                />
+              </div>
+            )}
             {error && (
               <p className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                 {error}
@@ -240,7 +302,7 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
               </button>
               <button
                 onClick={handleAnalyze}
-                disabled={isAnalyzing || newsText.trim().length < 10}
+                disabled={isAnalyzing || (inputMode === 'text' ? newsText.trim().length < 10 : !urlInput.trim())}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-900/20"
               >
                 {isAnalyzing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
@@ -277,6 +339,14 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
                 Localizar
               </button>
             </div>
+
+            {/* Precisão da localização */}
+            {result.aiAnalyzed && (
+              <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 ${isDarkMode ? 'bg-[#1A1A1A] text-[#888888]' : 'bg-gray-50 text-gray-500'}`}>
+                <MapPin size={12} />
+                <span>Precisão: <strong>{translatePrecision(locationPrecision)}</strong></span>
+              </div>
+            )}
 
             {/* Abas */}
             <ModalTabs

@@ -16,12 +16,13 @@
 import { supabase } from '../lib/supabase';
 import {
   analyzeNewsText,
-  buildGeocodeQuery,
+  buildGeocodeQueryByPrecision,
   formatLocation,
   getActiveModel,
   NewsAnalysisResult,
 } from './newsAnalysis';
 import { geocodeAddress } from './geocoding';
+import { extractArticleFromUrl } from './articleExtractor';
 import { IncidentRow } from './incidents';
 import { Incident } from '../types/Incident';
 
@@ -35,6 +36,8 @@ export interface NewsIngestionResult {
   geocodeAddress: string | null;
   /** true quando a IA foi consultada (env configurado); false em modo manual. */
   aiAnalyzed: boolean;
+  /** Fonte/dominio extraído da URL (quando disponível). */
+  sourceName?: string;
 }
 
 /** Dados finais para confirmar a criação do incidente. */
@@ -51,6 +54,9 @@ export interface ConfirmIngestionInput {
 interface IngestInput {
   text: string;
   originalUrl?: string;
+  sourceName?: string;
+  articleTitle?: string;
+  publishedAt?: string | null;
 }/**
  * Etapa 1: salva o texto original e analisa com IA + geocoding.
  * Não cria o incidente — retorna o preview para confirmação.
@@ -60,40 +66,49 @@ export async function ingestNewsText(newsText: string): Promise<NewsIngestionRes
 }
 
 /**
- * Etapa 1 (URL): camada futura de ingestão por URL.
- * O scraping do texto ainda não é implementado; ao habilitar, a URL será salva
- * em `raw_reports.original_url` e o texto extraído seguirá o pipeline normal.
+ * Etapa 1 (URL): extrai o artigo via Jina e segue o pipeline normal.
+ * A URL, o texto extraído, a fonte e o título são salvos em raw_reports.
  */
 export async function ingestNewsUrl(url: string): Promise<NewsIngestionResult> {
   if (!url || !/^https?:\/\/\S+$/i.test(url.trim())) {
     throw new Error('URL inválida.');
   }
-  const text = await fetchArticleText(url);
-  return runIngestion({ text, originalUrl: url });
+  const article = await extractArticleFromUrl(url);
+  return runIngestion({
+    text: article.content,
+    originalUrl: url,
+    sourceName: article.sourceName,
+    articleTitle: article.title,
+    publishedAt: article.publishedAt,
+  });
 }
 
 /**
- * Extrai o texto de uma notícia a partir de uma URL.
- * PONTO DE EXTENSÃO: o scraping será implementado aqui futuramente
- * (ex: readability/cheerio em uma função serverless). Por ora, lança erro claro.
+ * Extrai o texto de uma notícia a partir de uma URL via Jina Reader API.
  */
-export async function fetchArticleText(_url: string): Promise<string> {
-  throw new Error(
-    'Extração de notícia por URL ainda não implementada. Cole o texto da notícia manualmente.'
-  );
+export async function fetchArticleText(url: string): Promise<string> {
+  const article = await extractArticleFromUrl(url);
+  return article.content;
 }
 
-async function runIngestion({ text, originalUrl }: IngestInput): Promise<NewsIngestionResult> {
+async function runIngestion({ text, originalUrl, sourceName, articleTitle, publishedAt }: IngestInput): Promise<NewsIngestionResult> {
   const t0 = performance.now();
 
   if (!text || text.trim().length < 10) {
     throw new Error('Texto da notícia muito curto para análise.');
   }
 
-  // 1. Salvar o texto original em raw_reports
+  // 1. Salvar o texto original em raw_reports (com campos extras quando disponíveis)
   const { data: rawReport, error: rawError } = await supabase
     .from('raw_reports')
-    .insert({ original_text: text, original_url: originalUrl ?? null, processed: false })
+    .insert({
+      original_text: text,
+      original_url: originalUrl ?? null,
+      source_name: sourceName ?? null,
+      title: articleTitle ?? null,
+      published_at: publishedAt ?? null,
+      processed: false,
+    })
     .select('id')
     .single();
 
@@ -118,13 +133,15 @@ async function runIngestion({ text, originalUrl }: IngestInput): Promise<NewsIng
   }
   const aiMs = performance.now() - tAi;
 
-  // 3. Geocodificar usando SOMENTE street + neighborhood + city + state
+  // 3. Geocodificar usando precisão da localização
   const tGeo = performance.now();
   let lat: number | null = null;
   let lng: number | null = null;
   let displayName: string | null = null;
 
-  const geocodeQuery = analysis ? buildGeocodeQuery(analysis.location) : '';
+  const geocodeQuery = analysis
+    ? buildGeocodeQueryByPrecision(analysis.location, analysis.location_precision)
+    : '';
 
   if (geocodeQuery) {
     const geo = await geocodeAddress(geocodeQuery);
@@ -153,6 +170,7 @@ async function runIngestion({ text, originalUrl }: IngestInput): Promise<NewsIng
       type: 'other',
       severity: 'medium',
       confidence_score: 0,
+      location_precision: 'unknown',
       location: {
         street: '',
         number: '',
@@ -170,6 +188,7 @@ async function runIngestion({ text, originalUrl }: IngestInput): Promise<NewsIng
     lng,
     geocodeAddress: displayName,
     aiAnalyzed,
+    sourceName: sourceName ?? undefined,
   };
 }
 
@@ -186,6 +205,7 @@ export async function confirmIngestion(input: ConfirmIngestionInput): Promise<In
     extracted_type: input.analysis.type,
     extracted_location: formatLocation(input.analysis.location),
     extracted_severity: input.analysis.severity,
+    location_precision: input.analysis.location_precision,
     confidence: input.analysis.confidence_score,
     raw_response: input.analysis as unknown as object,
   });
