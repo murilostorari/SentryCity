@@ -14,6 +14,7 @@ import { useIncidents } from './hooks/useIncidents';
 import { useFilters } from './hooks/useFilters';
 import { useSearch } from './hooks/useSearch';
 import { useAuth } from './hooks/useAuth';
+import { useIncidentNews } from './hooks/useIncidentNews';
 import { Incident } from './types/Incident';
 
 type AuthMode = 'login' | 'signup';
@@ -82,6 +83,7 @@ export default function App() {
   };
 
   const selectedIncident = incidents.find(i => i.id === selectedStation);
+  const { news: selectedIncidentNews } = useIncidentNews(selectedIncident?.id ?? null);
 
   return (
     <ToastProvider isDarkMode={isDarkMode}>
@@ -214,9 +216,9 @@ export default function App() {
 
         {/* News Card */}
         <AnimatePresence>
-          {selectedIncident && selectedIncident.news && (
+          {selectedIncident && selectedIncidentNews.length > 0 && (
             <NewsCard
-              news={selectedIncident.news}
+              news={selectedIncidentNews}
               incident={selectedIncident}
               isDarkMode={isDarkMode}
               isModalOpen={isNewsModalOpen}

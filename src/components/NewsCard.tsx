@@ -1,19 +1,10 @@
-import { motion, AnimatePresence } from 'motion/react';
-import { ExternalLink, Clock, Plus } from 'lucide-react';
+import { motion } from 'motion/react';
+import { ExternalLink, Clock, Plus, Newspaper } from 'lucide-react';
 import NewsModal from './NewsModal';
-import { Incident } from '../types/Incident';
-
-interface NewsItem {
-  source: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  url: string;
-  time: string;
-}
+import { Incident, IncidentNewsItem } from '../types/Incident';
 
 interface NewsCardProps {
-  news: NewsItem[];
+  news: IncidentNewsItem[];
   incident: Incident;
   isDarkMode: boolean;
   isModalOpen: boolean;
@@ -44,7 +35,7 @@ export default function NewsCard({ news, incident, isDarkMode, isModalOpen, onOp
       >
         {displayNews.map((item, index) => (
           <div 
-            key={index}
+            key={`${item.url}-${index}`}
             className={`
               relative w-[calc(100%-60px)] md:w-[340px] rounded-2xl shadow-xl overflow-hidden flex p-3 gap-3 pointer-events-auto transition-all duration-300
               ${index >= mobileLimit ? 'hidden md:flex' : 'flex'}
@@ -52,13 +43,26 @@ export default function NewsCard({ news, incident, isDarkMode, isModalOpen, onOp
             `}
           >
             {/* Square Image with rounded corners */}
-            <div className="w-20 h-20 shrink-0 relative">
-              <img 
-                src={item.imageUrl} 
-                alt={item.title} 
-                className="absolute inset-0 w-full h-full object-cover rounded-lg"
-              />
-            </div>
+            <a
+              href={item.url || undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-20 h-20 shrink-0 relative rounded-lg overflow-hidden"
+            >
+              {item.imageUrl ? (
+                <img 
+                  src={item.imageUrl} 
+                  alt={item.title} 
+                  className="absolute inset-0 w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : null}
+              {!item.imageUrl && (
+                <div className={`absolute inset-0 flex items-center justify-center ${isDarkMode ? 'bg-[#2A2A2A]' : 'bg-gray-200'}`}>
+                  <Newspaper size={24} className={isDarkMode ? 'text-gray-600' : 'text-gray-400'} />
+                </div>
+              )}
+            </a>
             
             {/* Content */}
             <div className="flex-1 flex flex-col justify-between min-w-0">
@@ -73,7 +77,7 @@ export default function NewsCard({ news, incident, isDarkMode, isModalOpen, onOp
               
               <div className="flex items-center justify-between mt-1.5">
                 <a 
-                  href={item.url} 
+                  href={item.url || undefined} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-[10px] font-bold text-blue-500 hover:underline truncate max-w-[100px]"
@@ -121,16 +125,14 @@ export default function NewsCard({ news, incident, isDarkMode, isModalOpen, onOp
       </motion.div>
 
       {/* Modal for all sources */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <NewsModal 
-            news={news} 
-            incident={incident}
-            onClose={onCloseModal} 
-            isDarkMode={isDarkMode} 
-          />
-        )}
-      </AnimatePresence>
+      {isModalOpen && (
+        <NewsModal 
+          news={news} 
+          incident={incident}
+          onClose={onCloseModal} 
+          isDarkMode={isDarkMode} 
+        />
+      )}
     </>
   );
 }

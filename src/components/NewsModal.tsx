@@ -1,18 +1,9 @@
-import { X, ExternalLink, Clock, AlertTriangle, Zap, Music, PartyPopper, Volume2, Ribbon, HelpCircle } from 'lucide-react';
-import { Incident } from '../types/Incident';
+import { X, ExternalLink, Clock, AlertTriangle, Zap, Music, PartyPopper, Volume2, Ribbon, HelpCircle, Newspaper } from 'lucide-react';
+import { Incident, IncidentNewsItem } from '../types/Incident';
 import ResponsiveModal from './ResponsiveModal';
 
-interface NewsItem {
-  source: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  url: string;
-  time: string;
-}
-
 interface NewsModalProps {
-  news: NewsItem[];
+  news: IncidentNewsItem[];
   incident: Incident;
   onClose: () => void;
   isDarkMode: boolean;
@@ -123,11 +114,23 @@ export default function NewsModal({ news, incident, onClose, isDarkMode }: NewsM
         <h3 className="text-sm font-semibold opacity-70 mb-2 px-1">Fontes Relacionadas ({news.length})</h3>
         {news.map((item, index) => (
           <div 
-            key={index} 
+            key={`${item.url}-${index}`} 
             className={`relative flex gap-4 p-3 rounded-xl border transition-colors group ${isDarkMode ? 'border-white/5 bg-white/5 hover:bg-white/10' : 'border-gray-100 bg-gray-50 hover:bg-gray-100'}`}
           >
             <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden relative">
-              <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
+              {item.imageUrl ? (
+                <img
+                  src={item.imageUrl}
+                  alt={item.title}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : null}
+              {!item.imageUrl && (
+                <div className={`absolute inset-0 flex items-center justify-center ${isDarkMode ? 'bg-[#2A2A2A]' : 'bg-gray-200'}`}>
+                  <Newspaper size={24} className={isDarkMode ? 'text-gray-600' : 'text-gray-400'} />
+                </div>
+              )}
             </div>
             
             <div className="flex-1 flex flex-col justify-between min-w-0">

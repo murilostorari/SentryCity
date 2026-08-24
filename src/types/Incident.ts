@@ -56,6 +56,16 @@ export interface ConfidenceDetails {
   };
 }
 
+/** Fonte de notícia vinculada a um incidente (view incident_news). */
+export interface IncidentNewsItem {
+  source: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  url: string;
+  time: string;
+}
+
 export interface Incident {
   id: string;
   lat: number;
@@ -73,13 +83,6 @@ export interface Incident {
   resolvedAt?: number | null;
   expiresAt?: number | null;
   created_by?: string | null;
-  news?: {
-    source: string;
-    title: string;
-    description: string;
-    imageUrl: string;
-    url: string;
-    time: string;
-  }[];
+  news?: IncidentNewsItem[];
   reportCounts?: ReportCounts;
 }

@@ -56,6 +56,8 @@ interface IngestInput {
   originalUrl?: string;
   sourceName?: string;
   articleTitle?: string;
+  articleDescription?: string;
+  imageUrl?: string | null;
   publishedAt?: string | null;
 }/**
  * Etapa 1: salva o texto original e analisa com IA + geocoding.
@@ -79,6 +81,8 @@ export async function ingestNewsUrl(url: string): Promise<NewsIngestionResult> {
     originalUrl: url,
     sourceName: article.sourceName,
     articleTitle: article.title,
+    articleDescription: article.description,
+    imageUrl: article.imageUrl,
     publishedAt: article.publishedAt,
   });
 }
@@ -91,7 +95,15 @@ export async function fetchArticleText(url: string): Promise<string> {
   return article.content;
 }
 
-async function runIngestion({ text, originalUrl, sourceName, articleTitle, publishedAt }: IngestInput): Promise<NewsIngestionResult> {
+async function runIngestion({
+  text,
+  originalUrl,
+  sourceName,
+  articleTitle,
+  articleDescription,
+  imageUrl,
+  publishedAt,
+}: IngestInput): Promise<NewsIngestionResult> {
   const t0 = performance.now();
 
   if (!text || text.trim().length < 10) {
@@ -106,6 +118,8 @@ async function runIngestion({ text, originalUrl, sourceName, articleTitle, publi
       original_url: originalUrl ?? null,
       source_name: sourceName ?? null,
       title: articleTitle ?? null,
+      description: articleDescription ?? null,
+      image_url: imageUrl ?? null,
       published_at: publishedAt ?? null,
       processed: false,
     })
@@ -215,10 +229,10 @@ export async function confirmIngestion(input: ConfirmIngestionInput): Promise<In
     // Não falha a criação do incidente; apenas registra o erro.
   }
 
-  // 5b. Marcar raw_report como processado
+  // 5b. Vincular raw_report ao incidente + marcar como processado
   const { error: processedError } = await supabase
     .from('raw_reports')
-    .update({ processed: true })
+    .update({ processed: true, incident_id: incidentRow.id })
     .eq('id', input.rawReportId);
 
   if (processedError) {

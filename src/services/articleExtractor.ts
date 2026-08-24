@@ -41,10 +41,10 @@ export async function extractArticleFromUrl(url: string): Promise<ArticleExtract
 
   const title = (data.title || '').trim();
   const rawContent = (data.content || data.markdown || '').trim();
-  const description = (data.description || '').trim();
+  const description = (data.description || data.metadata?.['og:description'] || '').trim();
   const author = (data.author || data.metadata?.author || '').trim();
   const publishedAt = data.date || data.metadata?.date || null;
-  const imageUrl = data.image || data.metadata?.image || null;
+  const imageUrl = data.image || data.metadata?.image || data.metadata?.['og:image'] || null;
 
   // Extrair domínio/fonte da URL
   let sourceName = '';
