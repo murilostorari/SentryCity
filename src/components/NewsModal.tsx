@@ -5,11 +5,12 @@ import ResponsiveModal from './ResponsiveModal';
 interface NewsModalProps {
   news: IncidentNewsItem[];
   incident: Incident;
+  isOpen: boolean;
   onClose: () => void;
   isDarkMode: boolean;
 }
 
-export default function NewsModal({ news, incident, onClose, isDarkMode }: NewsModalProps) {
+export default function NewsModal({ news, incident, isOpen, onClose, isDarkMode }: NewsModalProps) {
   
   const getIcon = (type: string) => {
     switch (type) {
@@ -53,7 +54,7 @@ export default function NewsModal({ news, incident, onClose, isDarkMode }: NewsM
   };
 
   return (
-    <ResponsiveModal isOpen={true} onClose={onClose} className="max-w-2xl max-h-[85vh] flex flex-col" isDarkMode={isDarkMode}>
+    <ResponsiveModal isOpen={isOpen} onClose={onClose} className="max-w-2xl max-h-[85vh] flex flex-col" isDarkMode={isDarkMode}>
       {/* Header with Title and Close Button */}
       <div className={`p-4 border-b ${isDarkMode ? 'border-white/10' : 'border-gray-200'} flex items-center justify-between shrink-0`}>
         <h2 className="text-lg font-bold">Todas as Fontes</h2>

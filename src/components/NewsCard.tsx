@@ -125,14 +125,13 @@ export default function NewsCard({ news, incident, isDarkMode, isModalOpen, onOp
       </motion.div>
 
       {/* Modal for all sources */}
-      {isModalOpen && (
-        <NewsModal 
-          news={news} 
-          incident={incident}
-          onClose={onCloseModal} 
-          isDarkMode={isDarkMode} 
-        />
-      )}
+      <NewsModal 
+        news={news} 
+        incident={incident}
+        isOpen={isModalOpen}
+        onClose={onCloseModal} 
+        isDarkMode={isDarkMode} 
+      />
     </>
   );
 }

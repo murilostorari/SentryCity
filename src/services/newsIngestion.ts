@@ -158,7 +158,10 @@ async function runIngestion({
     : '';
 
   if (geocodeQuery) {
-    const geo = await geocodeAddress(geocodeQuery);
+    const geo = await geocodeAddress(geocodeQuery, {
+      expectedCity: analysis?.location.city || undefined,
+      expectedState: analysis?.location.state || undefined,
+    });
     if (geo) {
       lat = geo.lat;
       lng = geo.lng;

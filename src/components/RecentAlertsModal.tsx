@@ -27,24 +27,27 @@ export default function RecentAlertsModal({ isOpen, onClose, incidents, isDarkMo
         </button>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
-        {incidents.length > 0 ? (
-          incidents.map((incident) => (
-            <PinnedItem 
-              key={incident.id} 
-              incident={incident} 
-              onClick={() => {
-                onSelectIncident(incident);
-                onClose();
-              }}
-            />
-          ))
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-600">
-            <Bell size={48} className="mb-4 opacity-20" />
-            <p>Nenhum alerta recente</p>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar min-h-0">
+        {(() => {
+          const sorted = [...incidents].sort((a, b) => b.timestamp - a.timestamp);
+          return sorted.length > 0 ? (
+            sorted.map((incident) => (
+              <PinnedItem 
+                key={incident.id} 
+                incident={incident} 
+                onClick={() => {
+                  onSelectIncident(incident);
+                  onClose();
+                }}
+              />
+            ))
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-600">
+              <Bell size={48} className="mb-4 opacity-20" />
+              <p>Nenhum alerta recente</p>
+            </div>
+          );
+        })()}
       </div>
     </ResponsiveModal>
   );

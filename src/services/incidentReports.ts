@@ -284,10 +284,13 @@ export async function fetchUserConfirmWeights(incidentId: string): Promise<numbe
 
 /** Busca detalhes de confiança de um incidente (para exibição). */
 export async function fetchIncidentConfidence(incidentId: string): Promise<ConfidenceDetails> {
-  // Buscar fatores necessários
-  const [{ data: incident }, { data: source }, { data: reports }, { data: ai }, { data: confirmations }, confirmWeights] = await Promise.all([
-    supabase.from('incidents').select('confidence_score, source_id').eq('id', incidentId).single(),
-    supabase.from('sources').select('trust_score').eq('id', (await supabase.from('incidents').select('source_id').eq('id', incidentId).single()).data?.source_id).single(),
+  // Buscar o incidente primeiro para saber se existe source_id válido
+  const { data: incident } = await supabase.from('incidents').select('confidence_score, source_id').eq('id', incidentId).single();
+
+  const [{ data: source }, { data: reports }, { data: ai }, { data: confirmations }, confirmWeights] = await Promise.all([
+    incident?.source_id
+      ? supabase.from('sources').select('trust_score').eq('id', incident.source_id).single()
+      : Promise.resolve({ data: null } as { data: null }),
     supabase.from('incident_reports').select('type').eq('incident_id', incidentId),
     supabase.from('ai_analysis').select('confidence').eq('incident_id', incidentId).order('created_at', { ascending: false }).limit(1),
     supabase.from('incident_confirmations').select('similarity_score').eq('incident_id', incidentId).eq('confirmed', true),

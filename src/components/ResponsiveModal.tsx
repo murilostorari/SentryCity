@@ -76,7 +76,7 @@ export default function ResponsiveModal({ isOpen, onClose, children, className, 
               </div>
               
               {/* Content Container */}
-              <div className="flex-1 overflow-hidden flex flex-col pb-6 safe-area-bottom">
+              <div className="flex-1 overflow-hidden flex flex-col min-h-0 pb-6 safe-area-bottom">
                 {children}
               </div>
             </motion.div>
@@ -89,7 +89,7 @@ export default function ResponsiveModal({ isOpen, onClose, children, className, 
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className={`
                 fixed inset-0 m-auto z-[9999]
-                w-full max-w-md h-fit rounded-xl shadow-2xl
+                w-full max-w-md h-fit max-h-[85vh] rounded-xl shadow-2xl flex flex-col
                 bg-white dark:bg-[#1E1E1E] text-gray-900 dark:text-white
                 ${className || ''}
               `}
@@ -98,7 +98,7 @@ export default function ResponsiveModal({ isOpen, onClose, children, className, 
                 color: isDarkMode ? '#FFFFFF' : '#111827',
               }}
             >
-              <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex-1 overflow-hidden flex flex-col min-h-0">
                 {children}
               </div>
             </motion.div>

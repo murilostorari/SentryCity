@@ -68,10 +68,45 @@ function extractCityState(addr: any): { city: string; state: string; zipCode: st
   return { city, state, zipCode };
 }
 
+/** Normaliza texto para comparação (minúsculo, sem acentos). */
+function normalizeText(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/** Verifica se a cidade do resultado corresponde à cidade esperada (tolerante). */
+function cityMatches(candidateCity: string, expectedCity?: string): boolean {
+  if (!expectedCity) return true;
+  if (!candidateCity) return false;
+  const c = normalizeText(candidateCity);
+  const e = normalizeText(expectedCity);
+  return c === e || c.includes(e) || e.includes(c);
+}
+
+/**
+ * Escolhe o melhor candidato entre os resultados: prioriza aqueles cuja
+ * cidade corresponde à cidade esperada (evita plotar em outra cidade que
+ * tenha rua/bairro com o mesmo nome).
+ */
+function pickBestCandidate(
+  candidates: GeocodeResult[],
+  expectedCity?: string
+): GeocodeResult | null {
+  if (candidates.length === 0) return null;
+  if (!expectedCity) return candidates[0];
+  return candidates.find((r) => cityMatches(r.city, expectedCity)) ?? null;
+}
+
 /** Tenta geocodificar via Nominatim com retry simples em rate limit (429). */
-async function geocodeWithNominatim(query: string): Promise<GeocodeResult | null> {
+async function geocodeWithNominatim(
+  query: string,
+  expectedCity?: string
+): Promise<GeocodeResult | null> {
   const url =
-    `${NOMINATIM_BASE}/search?format=json&addressdetails=1&limit=1&countrycodes=br` +
+    `${NOMINATIM_BASE}/search?format=json&addressdetails=1&limit=5&countrycodes=br` +
     `&q=${encodeURIComponent(query)}`;
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -86,17 +121,19 @@ async function geocodeWithNominatim(query: string): Promise<GeocodeResult | null
       const data = await res.json();
       if (!Array.isArray(data) || data.length === 0) return null;
 
-      const first = data[0];
-      const { city, state, zipCode } = extractCityState(first.address);
-      return {
-        lat: parseFloat(first.lat),
-        lng: parseFloat(first.lon),
-        displayName: first.display_name,
-        address: first.display_name,
-        city,
-        state,
-        zipCode: zipCode || undefined,
-      };
+      const candidates: GeocodeResult[] = data.map((first: any) => {
+        const { city, state, zipCode } = extractCityState(first.address);
+        return {
+          lat: parseFloat(first.lat),
+          lng: parseFloat(first.lon),
+          displayName: first.display_name,
+          address: first.display_name,
+          city,
+          state,
+          zipCode: zipCode || undefined,
+        };
+      });
+      return pickBestCandidate(candidates, expectedCity);
     } catch (error) {
       console.warn('geocodeWithNominatim falhou (tentativa ' + (attempt + 1) + '):', error);
     }
@@ -105,46 +142,87 @@ async function geocodeWithNominatim(query: string): Promise<GeocodeResult | null
 }
 
 /** Fallback: Photon (komoot). Não tem countrycodes, mas encontra endereços brasileiros. */
-async function geocodeWithPhoton(query: string): Promise<GeocodeResult | null> {
-  const url = `${PHOTON_BASE}?limit=1&q=${encodeURIComponent(query)}`;
+async function geocodeWithPhoton(
+  query: string,
+  expectedCity?: string
+): Promise<GeocodeResult | null> {
+  const url = `${PHOTON_BASE}?limit=5&q=${encodeURIComponent(query)}`;
   try {
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!res.ok) return null;
     const data = await res.json();
-    const feature = data?.features?.[0];
-    if (!feature) return null;
+    const features: any[] = data?.features ?? [];
+    if (features.length === 0) return null;
 
-    const props = feature.properties || {};
-    const [lng, lat] = feature.geometry?.coordinates ?? [];
-    if (lat == null || lng == null) return null;
+    const candidates: GeocodeResult[] = features
+      .map((feature) => {
+        const props = feature.properties || {};
+        const [lng, lat] = feature.geometry?.coordinates ?? [];
+        if (lat == null || lng == null) return null;
+        return {
+          lat,
+          lng,
+          displayName: props.name || query,
+          address: props.name || query,
+          city: props.city || props.county || '',
+          state: props.state || '',
+          zipCode: props.postcode || undefined,
+        } as GeocodeResult;
+      })
+      .filter(Boolean);
 
-    return {
-      lat,
-      lng,
-      displayName: props.name || query,
-      address: props.name || query,
-      city: props.city || props.state || '',
-      state: props.state || '',
-      zipCode: props.postcode || undefined,
-    };
+    return pickBestCandidate(candidates, expectedCity);
   } catch (error) {
     console.warn('geocodeWithPhoton falhou:', error);
     return null;
   }
 }
 
+export interface GeocodeOptions {
+  /** Cidade esperada do endereço: resultados em outras cidades são descartados. */
+  expectedCity?: string;
+  /** Estado esperado (usado no fallback por cidade). */
+  expectedState?: string;
+}
+
 /**
  * Geocodifica um endereço textual completo. Retorna o primeiro resultado ou
  * `null` quando nada é encontrado. Tenta Nominatim e cai para Photon como
  * fallback (evita o erro "Não foi possível geocodificar" em falhas da primeira).
+ *
+ * Quando `expectedCity` é informado, descarta resultados de outras cidades e,
+ * se nada casar, geocodifica apenas "cidade, estado" para garantir que o
+ * ponto caia no município correto (centro da cidade).
  */
-export async function geocodeAddress(query: string): Promise<GeocodeResult | null> {
+export async function geocodeAddress(
+  query: string,
+  options?: GeocodeOptions
+): Promise<GeocodeResult | null> {
   if (!query || query.trim().length < 3) return null;
 
-  const nominatimResult = await geocodeWithNominatim(query);
-  if (nominatimResult) return nominatimResult;
+  const expectedCity = options?.expectedCity?.trim();
 
-  return geocodeWithPhoton(query);
+  const result =
+    (await geocodeWithNominatim(query, expectedCity)) ??
+    (await geocodeWithPhoton(query, expectedCity));
+
+  if (expectedCity) {
+    if (result) return result;
+
+    // Fallback: geocodifica só a cidade para não plotar em outro município.
+    const cityQuery = [expectedCity, options?.expectedState]
+      .filter(Boolean)
+      .join(', ');
+    if (cityQuery && normalizeText(cityQuery) !== normalizeText(query)) {
+      return (
+        (await geocodeWithNominatim(cityQuery)) ??
+        (await geocodeWithPhoton(cityQuery))
+      );
+    }
+    return null;
+  }
+
+  return result;
 }
 
 /**

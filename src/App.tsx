@@ -102,13 +102,12 @@ export default function App() {
       </AnimatePresence>
 
       {/* New Event Modal */}
-      {isNewEventModalOpen && (
-        <NewEventModal
-          onClose={() => setIsNewEventModalOpen(false)}
-          onSave={handleNewEvent}
-          isDarkMode={isDarkMode}
-        />
-      )}
+      <NewEventModal
+        isOpen={isNewEventModalOpen}
+        onClose={() => setIsNewEventModalOpen(false)}
+        onSave={handleNewEvent}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Auth Modal */}
       <AuthModal
@@ -121,13 +120,12 @@ export default function App() {
       />
 
       {/* News Ingestion Modal (Admin) */}
-      {isNewsIngestionModalOpen && (
-        <NewsIngestionModal
-          onClose={() => setIsNewsIngestionModalOpen(false)}
-          onCreated={handleNewsIngestionCreated}
-          isDarkMode={isDarkMode}
-        />
-      )}
+      <NewsIngestionModal
+        isOpen={isNewsIngestionModalOpen}
+        onClose={() => setIsNewsIngestionModalOpen(false)}
+        onCreated={handleNewsIngestionCreated}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Recent Alerts Modal */}
       <RecentAlertsModal
@@ -136,7 +134,10 @@ export default function App() {
         incidents={incidents}
         isDarkMode={isDarkMode}
         onSelectIncident={(incident) => {
-          flyToCoordinates(incident.lat, incident.lng, 15);
+          // Só voa até o evento no mapa se ele ainda estiver ativo.
+          if (incident.status === 'active') {
+            performSearch({ lat: incident.lat, lng: incident.lng, zoom: 15 });
+          }
           setSelectedStation(incident.id);
           setShowDetails(true);
         }}

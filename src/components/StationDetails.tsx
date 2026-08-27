@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, Edit3, User as UserIcon } from 'lucide-react';
 import { BarChart, Bar, ResponsiveContainer, AreaChart, Area, CartesianGrid, YAxis } from 'recharts';
@@ -18,6 +18,25 @@ const reportActions: { type: ReportType; label: string; icon: ReactNode; descrip
   { type: 'resolved', label: 'Informar resolução', icon: <ShieldCheck size={16} />, description: 'O incidente foi resolvido/normalizado' },
   { type: 'deny', label: 'Negar ocorrência', icon: <XCircle size={16} />, description: 'Este incidente não está ocorrendo/é falso' },
 ];
+
+function ChartContainer({ children }: { children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setReady(true));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, []);
+  return (
+    <ResponsiveContainer width="100%" height="100%" debounce={100}>
+      {ready ? children : <div />}
+    </ResponsiveContainer>
+  );
+}
 
 export default function StationDetails({ 
   incident, 
@@ -371,11 +390,11 @@ function DetailsTab({
           <Info size={14} className="text-gray-400 dark:text-[#666666]" />
         </div>
         <div className="h-[140px] w-full relative">
-          <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer>
             <BarChart data={hourlyFrequency} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
               <Bar dataKey="count" fill={getSeverityHex(incident.severity)} radius={[2, 2, 0, 0]} />
             </BarChart>
-          </ResponsiveContainer>
+          </ChartContainer>
           <div className="flex justify-between text-xs text-gray-400 dark:text-[#666666] mt-2">
             <span>{hourlyFrequency[0]?.label || '-24h'}</span>
             <span>{hourlyFrequency[23]?.label || 'Agora'}</span>
@@ -449,7 +468,7 @@ function TimelineTab({ timeline, counts, severityHex, isLoading, onRefresh }: { 
           <Info size={14} className="text-gray-400 dark:text-[#666666]" />
         </div>
         <div className="h-[140px] w-full relative">
-          <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer>
             <AreaChart data={severityData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorSeverity" x1="0" y1="0" x2="0" y2="1">
@@ -461,7 +480,7 @@ function TimelineTab({ timeline, counts, severityHex, isLoading, onRefresh }: { 
               <YAxis orientation="right" tick={{ fill: '#9CA3AF', fontSize: 10 }} axisLine={false} tickLine={false} />
               <Area type="monotone" dataKey="value" stroke={severityHex} strokeWidth={2} fillOpacity={1} fill="url(#colorSeverity)" />
             </AreaChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import { geocodeAddress, fetchByCep } from '../services/geocoding';
 import { buildGeocodeQuery, formatLocation, NewsLocation, LocationPrecision } from '../services/newsAnalysis';
 
 interface NewsIngestionModalProps {
+  isOpen: boolean;
   onClose: () => void;
   onCreated: (incident: any) => void;
   isDarkMode: boolean;
@@ -75,7 +76,7 @@ const emptyLoc = (): NewsLocation => ({
 
 type Tab = 'general' | 'address';
 
-export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: NewsIngestionModalProps) {
+export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkMode }: NewsIngestionModalProps) {
   const [inputMode, setInputMode] = useState<'text' | 'url'>('text');
   const [newsText, setNewsText] = useState('');
   const [urlInput, setUrlInput] = useState('');
@@ -136,7 +137,10 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
     setError(null);
     try {
       const query = buildGeocodeQuery(loc);
-      const geo = await geocodeAddress(query);
+      const geo = await geocodeAddress(query, {
+        expectedCity: loc.city || undefined,
+        expectedState: loc.state || undefined,
+      });
       if (geo) {
         setLat(geo.lat);
         setLng(geo.lng);
@@ -216,7 +220,7 @@ export default function NewsIngestionModal({ onClose, onCreated, isDarkMode }: N
   };
 
   return (
-    <ResponsiveModal isOpen={true} onClose={handleClose} className="max-w-lg" isDarkMode={isDarkMode}>
+    <ResponsiveModal isOpen={isOpen} onClose={handleClose} className="max-w-lg" isDarkMode={isDarkMode}>
       <div className={`flex items-center justify-between p-4 border-b shrink-0 ${isDarkMode ? 'border-[#333]' : 'border-gray-200'}`}>
         <div className="flex items-center gap-2">
           <Newspaper size={18} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />

@@ -6,6 +6,7 @@ import ModalTabs from './ModalTabs';
 import { searchAddressSuggestions, geocodeAddress, fetchByCep } from '../services/geocoding';
 
 interface NewEventModalProps {
+  isOpen: boolean;
   onClose: () => void;
   onSave: (event: any) => void;
   isDarkMode: boolean;
@@ -17,7 +18,7 @@ const formatCep = (v: string) => {
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 };
 
-export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventModalProps) {
+export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: NewEventModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [street, setStreet] = useState('');
@@ -46,6 +47,31 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const streetTimeout = useRef<NodeJS.Timeout | null>(null);
   const cityTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitle('');
+      setDescription('');
+      setStreet('');
+      setNumber('');
+      setComplement('');
+      setNeighborhood('');
+      setCity('');
+      setState('');
+      setZipCode('');
+      setType('accident');
+      setSeverity('medium');
+      setCoordinates(null);
+      setIsSubmitting(false);
+      setSubmitError(null);
+      setActiveTab('general');
+      setActiveDropdown(null);
+      setStreetSuggestions([]);
+      setCitySuggestions([]);
+      setShowStreetSuggestions(false);
+      setShowCitySuggestions(false);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -174,7 +200,10 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
       // Sem coordenadas de uma sugestão, geocodifica o endereço completo.
       if (finalLat == null || finalLng == null) {
         const query = [street, neighborhood, city].filter(Boolean).join(', ');
-        const result = await geocodeAddress(query);
+        const result = await geocodeAddress(query, {
+          expectedCity: city || undefined,
+          expectedState: state || undefined,
+        });
         if (!result) {
           setSubmitError(
             'Não foi possível localizar esse endereço. Selecione uma sugestão ou verifique os dados.'
@@ -247,7 +276,7 @@ export default function NewEventModal({ onClose, onSave, isDarkMode }: NewEventM
   }`;
 
   return (
-    <ResponsiveModal isOpen={true} onClose={onClose} className="max-w-md" isDarkMode={isDarkMode}>
+    <ResponsiveModal isOpen={isOpen} onClose={onClose} className="max-w-md" isDarkMode={isDarkMode}>
       <div className={`flex items-center justify-between p-4 border-b shrink-0 ${isDarkMode ? 'border-[#333]' : 'border-gray-200'}`}>
         <h2 className="text-lg font-semibold">Novo Evento</h2>
         <button
