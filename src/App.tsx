@@ -17,7 +17,7 @@ import { useAuth } from './hooks/useAuth';
 import { useIncidentNews } from './hooks/useIncidentNews';
 import { Incident } from './types/Incident';
 
-type AuthMode = 'login' | 'signup';
+type AuthMode = 'login' | 'signup' | 'reset' | 'newpassword';
 
 export default function App() {
   const { incidents, addIncident, refresh } = useIncidents();
@@ -29,7 +29,7 @@ export default function App() {
     typeFilter, setTypeFilter
   } = useFilters(incidents);
   const { flyToCoordinates, currentCity, handleSearch: performSearch } = useSearch();
-  const { user, profile, isAuthenticated, isLoading, signIn, signUp, signOut } = useAuth();
+  const { user, profile, isAuthenticated, isLoading, signIn, signUp, signOut, resetPassword, confirmNewPassword, checkAuthCallback } = useAuth();
 
   const [selectedStation, setSelectedStation] = useState<string | null>('INC-001');
   const [showDetails, setShowDetails] = useState(false);
@@ -54,6 +54,19 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  // Detecta link de redefinição de senha (parâmetro ?code na URL).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('code')) {
+      // Troca o código por sessão e abre o modal para definir nova senha.
+      checkAuthCallback().then(({ session, error }) => {
+        if (session && !error) {
+          openAuthModal('newpassword');
+        }
+      });
+    }
+  }, []);
 
   const handleSelectStation = (id: string | null) => {
     setSelectedStation(id);
@@ -117,6 +130,8 @@ export default function App() {
         initialMode={authModalMode}
         onSignIn={signIn}
         onSignUp={signUp}
+        onResetPassword={resetPassword}
+        onConfirmNewPassword={confirmNewPassword}
       />
 
       {/* News Ingestion Modal (Admin) */}

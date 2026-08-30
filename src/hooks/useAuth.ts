@@ -10,6 +10,9 @@ import {
   getCurrentSession,
   fetchProfile,
   upsertProfile,
+  sendPasswordReset,
+  updatePassword,
+  handleAuthCallback,
 } from '../services/auth';
 
 /**
@@ -101,6 +104,29 @@ export function useAuth() {
     return p;
   }, [user]);
 
+  const resetPassword = useCallback(async (email: string) => {
+    setError(null);
+    const result = await sendPasswordReset(email);
+    if (result.error) setError(result.error);
+    return result;
+  }, []);
+
+  const confirmNewPassword = useCallback(async (newPassword: string) => {
+    setError(null);
+    const result = await updatePassword(newPassword);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      await refresh();
+    }
+    return result;
+  }, [refresh]);
+
+  const checkAuthCallback = useCallback(async () => {
+    setError(null);
+    return handleAuthCallback();
+  }, []);
+
   return {
     user,
     profile,
@@ -111,6 +137,9 @@ export function useAuth() {
     signIn,
     signOut,
     updateName,
+    resetPassword,
+    confirmNewPassword,
+    checkAuthCallback,
     refresh,
     refreshProfile,
   };

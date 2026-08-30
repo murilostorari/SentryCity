@@ -7,6 +7,7 @@
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types/Profile';
 import { User } from '@supabase/supabase-js';
+import { translateAuthError } from '../lib/authErrors';
 
 /** Resultado de cadastro/login. */
 export interface AuthResult {
@@ -26,7 +27,7 @@ export async function signUpWithEmail(email: string, password: string, name?: st
     },
   });
 
-  if (error) return { user: null, requiresEmailConfirmation: false, error: error.message };
+  if (error) return { user: null, requiresEmailConfirmation: false, error: translateAuthError(error.message) };
 
   // Se o profile não for criado pelo trigger (ex: email já existe), garante via upsert.
   if (data.user) {
@@ -45,8 +46,41 @@ export async function signUpWithEmail(email: string, password: string, name?: st
 /** Login com email e senha. */
 export async function signInWithEmail(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { user: null, error: error.message };
+  if (error) return { user: null, error: translateAuthError(error.message) };
   return { user: data.user, error: null };
+}
+
+/** Envio de link para redefinição de senha. */
+export async function sendPasswordReset(email: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/auth/cb`,
+  });
+  return { error: error ? translateAuthError(error.message) : null };
+}
+
+/** Troca o código (query param ?code) por uma sessão de recuperação de senha. */
+export async function exchangeCodeForSession(code: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  return { error: error ? translateAuthError(error.message) : null };
+}
+
+/** Atualiza a senha do usuário autenticado (sessão de recuperação ativa). */
+export async function updatePassword(newPassword: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  return { error: error ? translateAuthError(error.message) : null };
+}
+
+/** Detecta e consome o parâmetro ?code da URL (link de recuperação de senha). */
+export async function handleAuthCallback(): Promise<{ session: boolean; error: string | null }> {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (!code) return { session: false, error: null };
+
+  // Remove ?code da URL para evitar re-processamento no reload.
+  window.history.replaceState({}, document.title, window.location.pathname);
+
+  const { error } = await exchangeCodeForSession(code);
+  return { session: !error, error: error ? translateAuthError(error) : null };
 }
 
 /** Logout. */
