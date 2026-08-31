@@ -24,8 +24,8 @@ export default function Sidebar({ onClose, currentCity = "Adamantina, SP", incid
       >
         <div className="p-6 flex items-center h-[88px] relative overflow-hidden">
           <div className="flex items-center gap-3 absolute left-6 top-6">
-            <div className="w-10 h-10 bg-black dark:bg-white rounded-xl flex items-center justify-center text-white dark:text-black font-bold shrink-0 shadow-sm z-20 relative">
-              <Activity size={20} />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm z-20 relative overflow-hidden">
+              <img src="/Logo.png" alt="SentryCity" className="w-10 h-10 object-contain" />
             </div>
             <motion.div 
               initial={{ opacity: 1 }}
@@ -58,16 +58,21 @@ export default function Sidebar({ onClose, currentCity = "Adamantina, SP", incid
           {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="flex-1 overflow-y-auto py-2 overflow-x-hidden custom-scrollbar">
+         <div className="flex-1 overflow-y-auto py-2 overflow-x-hidden custom-scrollbar">
           <div className="px-4 space-y-2">
-            <NavItem 
-              icon={<AlertTriangle size={20} />} 
-              label="Incidentes Ativos" 
-              badge={incidents.length.toString()} 
-              badgeColor="bg-red-100 dark:bg-[#3A1D1D] text-red-600 dark:text-[#E54D4D]" 
-              active 
-              isCollapsed={isCollapsed} 
-            />
+            {(() => {
+              const activeIncidents = incidents.filter(i => i.status !== 'resolved' && i.status !== 'cleared');
+              return (
+                <NavItem 
+                  icon={<AlertTriangle size={20} />} 
+                  label="Incidentes Ativos" 
+                  badge={activeIncidents.length.toString()} 
+                  badgeColor="bg-red-100 dark:bg-[#3A1D1D] text-red-600 dark:text-[#E54D4D]" 
+                  active 
+                  isCollapsed={isCollapsed} 
+                />
+              );
+            })()}
             
             <button 
               onClick={onOpenRecentAlerts}

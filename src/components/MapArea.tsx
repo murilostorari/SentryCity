@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Incident } from '../types/Incident';
 import IncidentMarker from './IncidentMarker';
 import IncidentPopup from './IncidentPopup';
+import ClusterPopup from './ClusterPopup';
 import OffScreenIndicator from './OffScreenIndicator';
 import { Colors } from '../constants/Colors';
 
@@ -74,6 +75,13 @@ export default function MapArea({
   // Off-screen indicator state
   const [isOffScreen, setIsOffScreen] = useState(false);
   const [bearingToIncident, setBearingToIncident] = useState(0);
+
+  // Cluster popup state
+  const [selectedCluster, setSelectedCluster] = useState<{
+    incidents: Incident[];
+    longitude: number;
+    latitude: number;
+  } | null>(null);
 
   // Convert incidents to GeoJSON for clustering
   const points: any[] = incidents.map(incident => ({
@@ -224,7 +232,10 @@ export default function MapArea({
         style={{ width: '100%', height: '100%' }}
         mapStyle={isDarkMode ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
         attributionControl={false}
-        onClick={() => onSelectStation(null)}
+        onClick={() => {
+          onSelectStation(null);
+          setSelectedCluster(null);
+        }}
         onMove={handleMapMove}
       >
         {/* Off-Screen Indicator */}
@@ -369,6 +380,12 @@ export default function MapArea({
             else if (maxSeverity === 'high') clusterColor = Colors.Status.High;
             else if (maxSeverity === 'medium') clusterColor = Colors.Status.High;
 
+            // Get incident data from leaves
+            const clusterIncidents: Incident[] = leaves.map(leaf => {
+              const id = leaf.properties.incidentId;
+              return incidents.find(inc => inc.id === id);
+            }).filter((inc): inc is Incident => inc !== undefined);
+
             return (
               <Marker
                 key={`cluster-${cluster.id}`}
@@ -376,15 +393,16 @@ export default function MapArea({
                 latitude={latitude}
                 onClick={(e) => {
                   e.originalEvent.stopPropagation();
-                  const expansionZoom = Math.min(
-                    supercluster?.getClusterExpansionZoom(cluster.id as number) || zoom + 2,
-                    20
-                  );
-                  mapRef.current?.flyTo({
-                    center: [longitude, latitude],
-                    zoom: expansionZoom,
-                    duration: 1000
-                  });
+                  // Toggle cluster popup
+                  if (selectedCluster?.longitude === longitude && selectedCluster?.latitude === latitude) {
+                    setSelectedCluster(null);
+                  } else {
+                    setSelectedCluster({
+                      incidents: clusterIncidents,
+                      longitude,
+                      latitude
+                    });
+                  }
                 }}
               >
                 <div 
@@ -459,6 +477,42 @@ export default function MapArea({
                   incident={selectedIncidentData} 
                   onOpenDetails={onOpenDetails} 
                   onClose={() => onSelectStation(null)}
+                  isDarkMode={isDarkMode}
+                />
+              </motion.div>
+            </Popup>
+          )}
+        </AnimatePresence>
+
+        {/* Cluster Popup */}
+        <AnimatePresence mode="wait">
+          {selectedCluster && (
+            <Popup
+              key={`cluster-popup-${selectedCluster.longitude}-${selectedCluster.latitude}`}
+              longitude={selectedCluster.longitude}
+              latitude={selectedCluster.latitude}
+              anchor="bottom"
+              offset={24}
+              closeButton={false}
+              closeOnClick={false}
+              className="custom-popup"
+              maxWidth="300px"
+            >
+              <motion.div 
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative z-[100]"
+              >
+                <ClusterPopup 
+                  incidents={selectedCluster.incidents}
+                  onClose={() => setSelectedCluster(null)}
+                  onSelectIncident={(id) => {
+                    setSelectedCluster(null);
+                    onSelectStation(id);
+                  }}
                   isDarkMode={isDarkMode}
                 />
               </motion.div>

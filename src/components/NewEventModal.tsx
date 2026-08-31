@@ -38,7 +38,12 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
   const cepTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const dropdownRef = useRef<HTMLFormElement>(null);
+  const typeBtnRef = useRef<HTMLButtonElement>(null);
+  const severityBtnRef = useRef<HTMLButtonElement>(null);
+  const streetInputRef = useRef<HTMLInputElement>(null);
+  const cityInputRef = useRef<HTMLInputElement>(null);
 
   // Address Autocomplete State
   const [streetSuggestions, setStreetSuggestions] = useState<any[]>([]);
@@ -77,6 +82,9 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setActiveDropdown(null);
+        setDropdownPosition(null);
+        setShowStreetSuggestions(false);
+        setShowCitySuggestions(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -94,11 +102,17 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
       // O serviço retorna { lat, lng, displayName, raw }; a UI usa display_name/lat/lon.
       const data = results.map((r) => r.raw);
 
+      // Calculate position from input
+      const inputRef = kind === 'street' ? streetInputRef : cityInputRef;
+      const rect = inputRef.current?.getBoundingClientRect();
+
       if (kind === 'street') {
         setStreetSuggestions(data);
+        if (rect) setDropdownPosition({ top: rect.bottom + 4, left: rect.left, width: rect.width });
         setShowStreetSuggestions(true);
       } else {
         setCitySuggestions(data);
+        if (rect) setDropdownPosition({ top: rect.bottom + 4, left: rect.left, width: rect.width });
         setShowCitySuggestions(true);
       }
     } catch (error) {
@@ -268,7 +282,29 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
   };
 
   const toggleDropdown = (name: string) => {
-    setActiveDropdown(activeDropdown === name ? null : name);
+    if (activeDropdown === name) {
+      setActiveDropdown(null);
+      setDropdownPosition(null);
+      return;
+    }
+
+    // Calculate position from button
+    let btnRef: React.RefObject<HTMLButtonElement | null> | null = null;
+    if (name === 'type') btnRef = typeBtnRef;
+    else if (name === 'severity') btnRef = severityBtnRef;
+    else if (name === 'street') btnRef = streetInputRef as any;
+    else if (name === 'city') btnRef = cityInputRef as any;
+
+    if (btnRef?.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width
+      });
+    }
+
+    setActiveDropdown(name);
   };
 
   const inputClass = `w-full px-3 py-2 rounded-lg border outline-none transition-colors ${
@@ -326,9 +362,10 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="relative">
+              <div>
                 <label className="block text-sm font-medium mb-1 opacity-70">Tipo</label>
                 <button
+                  ref={typeBtnRef}
                   type="button"
                   onClick={() => toggleDropdown('type')}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] hover:bg-[#333]' : 'bg-white border-gray-300 hover:bg-gray-50'} transition-colors`}
@@ -338,12 +375,13 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                 </button>
 
                 <AnimatePresence>
-                  {activeDropdown === 'type' && (
+                  {activeDropdown === 'type' && dropdownPosition && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className={`absolute top-full mt-2 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                      className={`fixed rounded-lg shadow-xl p-1 z-[10001] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                      style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width }}
                     >
                       {['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'].map((t) => (
                         <button
@@ -352,6 +390,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                           onClick={() => {
                             setType(t);
                             setActiveDropdown(null);
+                            setDropdownPosition(null);
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md capitalize ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
                         >
@@ -364,9 +403,10 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                 </AnimatePresence>
               </div>
 
-              <div className="relative">
+              <div>
                 <label className="block text-sm font-medium mb-1 opacity-70">Severidade</label>
                 <button
+                  ref={severityBtnRef}
                   type="button"
                   onClick={() => toggleDropdown('severity')}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-[#2C2C2C] border-[#444] hover:bg-[#333]' : 'bg-white border-gray-300 hover:bg-gray-50'} transition-colors`}
@@ -376,12 +416,13 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                 </button>
 
                 <AnimatePresence>
-                  {activeDropdown === 'severity' && (
+                  {activeDropdown === 'severity' && dropdownPosition && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className={`absolute top-full mt-2 left-0 w-full rounded-lg shadow-xl p-1 z-[60] ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                      className={`fixed rounded-lg shadow-xl p-1 z-[10001] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                      style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width }}
                     >
                       {['low', 'medium', 'high', 'critical'].map((s) => (
                         <button
@@ -390,6 +431,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                           onClick={() => {
                             setSeverity(s);
                             setActiveDropdown(null);
+                            setDropdownPosition(null);
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md capitalize ${isDarkMode ? 'text-gray-200 hover:bg-[#2A2A2A]' : 'text-gray-700 hover:bg-gray-100'}`}
                         >
@@ -424,23 +466,34 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2 relative">
+              <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1 opacity-70">Endereço</label>
                 <input
+                  ref={streetInputRef}
                   type="text"
                   required
                   value={street}
                   onChange={handleStreetChange}
+                  onFocus={() => {
+                    if (street.length > 2 && streetSuggestions.length > 0) {
+                      const rect = streetInputRef.current?.getBoundingClientRect();
+                      if (rect) {
+                        setDropdownPosition({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+                        setShowStreetSuggestions(true);
+                      }
+                    }
+                  }}
                   className={inputClass}
                   placeholder="Nome da rua"
                 />
                 <AnimatePresence>
-                  {showStreetSuggestions && streetSuggestions.length > 0 && (
+                  {showStreetSuggestions && streetSuggestions.length > 0 && dropdownPosition && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                      className={`fixed rounded-lg shadow-xl p-1 z-[10001] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                      style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width }}
                     >
                       {streetSuggestions.map((suggestion, index) => (
                         <button
@@ -492,23 +545,34 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2 relative">
+              <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
                 <input
+                  ref={cityInputRef}
                   type="text"
                   required
                   value={city}
                   onChange={handleCityChange}
+                  onFocus={() => {
+                    if (city.length > 2 && citySuggestions.length > 0) {
+                      const rect = cityInputRef.current?.getBoundingClientRect();
+                      if (rect) {
+                        setDropdownPosition({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+                        setShowCitySuggestions(true);
+                      }
+                    }
+                  }}
                   className={inputClass}
                   placeholder="Nome da cidade"
                 />
                 <AnimatePresence>
-                  {showCitySuggestions && citySuggestions.length > 0 && (
+                  {showCitySuggestions && citySuggestions.length > 0 && dropdownPosition && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className={`absolute top-full mt-1 left-0 w-full rounded-lg shadow-xl p-1 z-[60] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                      className={`fixed rounded-lg shadow-xl p-1 z-[10001] max-h-48 overflow-y-auto no-scrollbar ${isDarkMode ? 'bg-[#1E1E1E] border border-[#2C2C2C]' : 'bg-white border border-gray-200'}`}
+                      style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width }}
                     >
                       {citySuggestions.map((suggestion, index) => (
                         <button

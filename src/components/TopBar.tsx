@@ -1,35 +1,14 @@
-import { useState, useRef, ChangeEvent, KeyboardEvent } from 'react';
-import { Search, Check, BarChart, Calendar, Train, Target, RotateCw, Moon, Sun, Menu, Filter, Bell, ChevronDown, Clock, AlertTriangle, Activity, Tag, LogIn, Loader2 } from 'lucide-react';
+import { useState, useRef, KeyboardEvent, useEffect } from 'react';
+import { Search, Check, Moon, Sun, Menu, Filter, Clock, AlertTriangle, Activity, Tag, LogIn, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FilterDropdown, DropdownItem } from './FilterDropdown';
 import UserMenu from './UserMenu';
 import { User } from '@supabase/supabase-js';
 import { Profile } from '../types/Profile';
 
-export default function TopBar({ 
-  onMenuClick, 
-  isDarkMode, 
-  toggleTheme,
-  severityFilter,
-  setSeverityFilter,
-  statusFilter,
-  setStatusFilter,
-  timeFilter,
-  setTimeFilter,
-  typeFilter,
-  setTypeFilter,
-  onNewEvent,
-  onSearch,
-  isAuthenticated,
-  user,
-  profile,
-  authLoading,
-  onLogin,
-  onSignup,
-  onLogout
-}: { 
-  onMenuClick?: () => void, 
-  isDarkMode?: boolean, 
+interface TopBarProps {
+  onMenuClick?: () => void,
+  isDarkMode?: boolean,
   toggleTheme?: () => void,
   severityFilter?: string[],
   setSeverityFilter?: (filters: string[]) => void,
@@ -47,109 +26,166 @@ export default function TopBar({
   authLoading?: boolean,
   onLogin?: () => void,
   onSignup?: () => void,
-  onLogout?: () => void
-}) {
+  onLogout?: () => void,
+  currentCity?: string,
+  onCitySelect?: (city: { lat: number, lng: number, name: string, state: string }) => void,
+}
+
+interface CitySuggestion {
+  lat: number;
+  lng: number;
+  name: string;
+  state: string;
+  displayName: string;
+}
+
+export default function TopBar({
+  onMenuClick,
+  isDarkMode,
+  toggleTheme,
+  severityFilter,
+  setSeverityFilter,
+  statusFilter,
+  setStatusFilter,
+  timeFilter,
+  setTimeFilter,
+  typeFilter,
+  setTypeFilter,
+  onNewEvent,
+  onSearch,
+  isAuthenticated,
+  user,
+  profile,
+  authLoading,
+  onLogin,
+  onSignup,
+  onLogout,
+  currentCity = 'Adamantina, SP',
+  onCitySelect,
+}: TopBarProps) {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
-  const abortController = useRef<AbortController | null>(null);
+  const [citySearchQuery, setCitySearchQuery] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const [selectedCityLabel, setSelectedCityLabel] = useState(currentCity);
+  const [loadingCities, setLoadingCities] = useState(false);
+  const cityTimeout = useRef<NodeJS.Timeout | null>(null);
+  const cityAbortController = useRef<AbortController | null>(null);
+  const cityInputRef = useRef<HTMLInputElement>(null);
+
+  const searchCities = async (query: string) => {
+    if (query.length < 2) {
+      setCitySuggestions([]);
+      return;
+    }
+    setLoadingCities(true);
+    if (cityAbortController.current) cityAbortController.current.abort();
+    const controller = new AbortController();
+    cityAbortController.current = controller;
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=8&countrycodes=br&featuretype=city`,
+        { signal: controller.signal, headers: { Accept: 'application/json' } }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const suggestions: CitySuggestion[] = data
+        .filter((item: any) => {
+          const addr = item.address || {};
+          return addr.city || addr.town || addr.village || addr.municipality || addr.state;
+        })
+        .map((item: any) => {
+          const addr = item.address || {};
+          const city = addr.city || addr.town || addr.village || addr.municipality || '';
+          const state = addr.state || '';
+          return {
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon),
+            name: city,
+            state: state,
+            displayName: item.display_name,
+          };
+        });
+      setCitySuggestions(suggestions);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      console.error("City search failed:", error);
+    } finally {
+      setLoadingCities(false);
+    }
+  };
+
+  useEffect(() => {
+    if (citySearchQuery.length > 1) {
+      if (cityTimeout.current) clearTimeout(cityTimeout.current);
+      cityTimeout.current = setTimeout(() => {
+        searchCities(citySearchQuery);
+        setShowCityDropdown(true);
+      }, 300);
+    } else {
+      setCitySuggestions([]);
+      setShowCityDropdown(false);
+    }
+    return () => {
+      if (cityTimeout.current) clearTimeout(cityTimeout.current);
+    };
+  }, [citySearchQuery]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (cityInputRef.current && !cityInputRef.current.closest('.city-search-wrapper')?.contains(event.target as Node)) {
+        setShowCityDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleCitySelect = (suggestion: CitySuggestion) => {
+    const label = `${suggestion.name}, ${suggestion.state}`;
+    setSelectedCityLabel(label);
+    setCitySearchQuery(label);
+    setShowCityDropdown(false);
+    if (onCitySelect) {
+      onCitySelect(suggestion);
+    }
+    if (onSearch) {
+      onSearch({
+        lat: suggestion.lat,
+        lng: suggestion.lng,
+        label: label,
+        zoom: 13
+      });
+    }
+  };
 
   const handleSearch = async (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && onSearch) {
-      if (searchTimeout.current) clearTimeout(searchTimeout.current);
-      if (abortController.current) abortController.current.abort();
-
-      if (searchQuery.length > 2) {
+      const query = citySearchQuery;
+      if (query.length > 2) {
         try {
-          const response = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=1`);
+          const response = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1`);
           const data = await response.json();
-          
           if (data.features && data.features.length > 0) {
             const feature = data.features[0];
             const name = [feature.properties.name, feature.properties.city, feature.properties.country].filter(Boolean).join(', ');
-            
             onSearch({
               lat: feature.geometry.coordinates[1],
               lng: feature.geometry.coordinates[0],
               label: name
             });
           } else {
-             onSearch(searchQuery);
+            onSearch(query);
           }
         } catch (error) {
           console.error("Search failed:", error);
-          onSearch(searchQuery);
+          onSearch(query);
         }
       } else {
-        onSearch(searchQuery);
+        onSearch(query);
       }
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
-
-    if (abortController.current) {
-      abortController.current.abort();
-      abortController.current = null;
-    }
-
-    if (value.length > 2) {
-      searchTimeout.current = setTimeout(async () => {
-        const controller = new AbortController();
-        abortController.current = controller;
-
-        try {
-          const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}&addressdetails=1&limit=5&countrycodes=br`);
-          const data = await response.json();
-          
-          const suggestions = data.map((feature: any) => {
-            const isStreet = feature.class === 'highway' || feature.type === 'residential' || feature.type === 'secondary' || feature.type === 'tertiary';
-            return {
-              display_name: feature.display_name,
-              lat: feature.lat,
-              lng: feature.lon,
-              zoom: isStreet ? 17 : 13
-            };
-          });
-          
-          setSuggestions(suggestions);
-          setShowSuggestions(true);
-        } catch (error: any) {
-          if (error.name === 'AbortError') return;
-          
-          setSuggestions([
-            { display_name: 'Av. Paulista, São Paulo, Brasil', lat: -23.5614, lng: -46.6565, zoom: 16 },
-            { display_name: 'Av. Copacabana, Rio de Janeiro, Brasil', lat: -22.9694, lng: -43.1868, zoom: 16 },
-            { display_name: 'Esplanada dos Ministérios, Brasília, Brasil', lat: -15.7975, lng: -47.8618, zoom: 15 }
-          ]);
-          setShowSuggestions(true);
-        }
-      }, 1000);
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleSuggestionClick = (suggestion: any) => {
-    setSearchQuery(suggestion.display_name);
-    setShowSuggestions(false);
-    if (onSearch) {
-      onSearch({
-        lat: typeof suggestion.lat === 'string' ? parseFloat(suggestion.lat) : suggestion.lat,
-        lng: typeof suggestion.lng === 'string' ? parseFloat(suggestion.lng) : suggestion.lng,
-        label: suggestion.display_name,
-        zoom: suggestion.zoom || 16
-      });
+      setShowCityDropdown(false);
     }
   };
 
@@ -235,47 +271,68 @@ export default function TopBar({
   return (
     <div className="flex items-center justify-between p-4 md:p-6 pointer-events-auto bg-transparent">
       <div className="flex items-center gap-4">
-        <button 
+        <button
           onClick={onMenuClick}
           className="p-2 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg text-gray-500 dark:text-[#888888] md:hidden shadow-sm"
         >
           <Menu size={20} />
         </button>
 
-        <div className="relative hidden md:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-[#666666]" size={16} />
-          <input 
-            type="text" 
-            placeholder="Buscar incidentes, locais..." 
-            value={searchQuery}
-            onChange={handleInputChange}
-            onKeyDown={handleSearch}
-            className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-[#2C2C2C] rounded-lg pl-10 pr-16 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-[#666666] focus:outline-none focus:border-blue-500 dark:focus:border-[#444444] w-[320px] transition-colors shadow-sm"
-          />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            <span className="bg-gray-100 dark:bg-[#262626] text-gray-500 dark:text-[#888888] text-[10px] px-1.5 py-0.5 rounded border border-gray-200 dark:border-[#333333]">/</span>
-          </div>
+        <div className="hidden md:block city-search-wrapper">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-[#666666]" size={16} />
+            <input
+              ref={cityInputRef}
+              type="text"
+              placeholder="Buscar cidade..."
+              value={citySearchQuery}
+              onChange={(e) => setCitySearchQuery(e.target.value)}
+              onKeyDown={handleSearch}
+              onFocus={() => {
+                if (citySuggestions.length > 0 || citySearchQuery.length > 1) {
+                  setShowCityDropdown(true);
+                }
+              }}
+              className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-[#2C2C2C] rounded-lg pl-10 pr-16 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-[#666666] focus:outline-none focus:border-blue-500 dark:focus:border-[#444444] w-[300px] transition-colors shadow-sm"
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <span className="bg-gray-100 dark:bg-[#262626] text-gray-500 dark:text-[#888888] text-[10px] px-1.5 py-0.5 rounded border border-gray-200 dark:border-[#333333]">/</span>
+            </div>
 
-          <AnimatePresence>
-            {showSuggestions && suggestions.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full mt-2 left-0 w-full bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-50"
-              >
-                {suggestions.map((suggestion, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md truncate"
-                  >
-                    {suggestion.display_name}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+            <AnimatePresence>
+              {showCityDropdown && (citySuggestions.length > 0 || loadingCities) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute top-full mt-2 left-0 w-full bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg shadow-xl p-2 z-[60] max-h-64 overflow-y-auto no-scrollbar"
+                >
+                  {loadingCities ? (
+                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-[#888888] flex items-center gap-2">
+                      <Loader2 size={14} className="animate-spin" />
+                      Carregando...
+                    </div>
+                  ) : (
+                    citySuggestions.map((city, index) => (
+                      <button
+                        key={`${city.name}-${city.state}-${index}`}
+                        onClick={() => handleCitySelect(city)}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] rounded-md flex items-center justify-between"
+                      >
+                        <span>{city.displayName}</span>
+                        {selectedCityLabel === `${city.name}, ${city.state}` && <Check size={14} className="text-blue-500" />}
+                      </button>
+                    ))
+                  )}
+                  {!loadingCities && citySuggestions.length === 0 && citySearchQuery.length > 1 && (
+                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-[#888888]">
+                      Nenhuma cidade encontrada
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 
@@ -380,14 +437,14 @@ export default function TopBar({
           </FilterDropdown>
         </div>
 
-        <button 
+        <button
           onClick={toggleTheme}
           className="p-2 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg text-gray-500 dark:text-[#888888] hover:text-gray-900 dark:hover:text-white transition-colors shadow-sm"
         >
           {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
-        <button 
+        <button
           onClick={onNewEvent}
           className="px-4 py-2 bg-blue-600 dark:bg-[#3B82F6] text-white rounded-lg text-sm font-medium hover:bg-blue-700 dark:hover:bg-blue-500 transition-colors shadow-sm"
         >

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -30,6 +30,16 @@ export default function App() {
   } = useFilters(incidents);
   const { flyToCoordinates, currentCity, handleSearch: performSearch } = useSearch();
   const { user, profile, isAuthenticated, isLoading, signIn, signUp, signOut, resetPassword, confirmNewPassword, checkAuthCallback } = useAuth();
+  const [selectedCity, setSelectedCity] = useState<{ lat: number; lng: number; name: string; state: string } | null>(null);
+
+  const filteredIncidentsByCity = useMemo(() => {
+    if (!selectedCity) return filteredIncidents;
+    const normalizedCity = selectedCity.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return filteredIncidents.filter(incident => {
+      const normalizedAddress = (incident.address || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return normalizedAddress.includes(normalizedCity);
+    });
+  }, [filteredIncidents, selectedCity]);
 
   const [selectedStation, setSelectedStation] = useState<string | null>('INC-001');
   const [showDetails, setShowDetails] = useState(false);
@@ -163,7 +173,7 @@ export default function App() {
         <Sidebar
           onClose={() => setIsSidebarOpen(false)}
           currentCity={currentCity}
-          incidents={incidents}
+          incidents={filteredIncidentsByCity}
           onOpenRecentAlerts={() => setIsRecentAlertsModalOpen(true)}
           isAdmin={profile?.role === 'admin' || profile?.role === 'analyst'}
           onOpenNewsIngestion={() => setIsNewsIngestionModalOpen(true)}
@@ -173,7 +183,7 @@ export default function App() {
       <div className="flex-1 flex flex-col relative w-full">
         <div className="absolute inset-0">
           <MapArea
-            incidents={filteredIncidents}
+            incidents={filteredIncidentsByCity}
             onSelectStation={handleSelectStation}
             selectedStation={selectedStation}
             onOpenDetails={() => setShowDetails(true)}
@@ -206,6 +216,8 @@ export default function App() {
             onLogin={() => openAuthModal('login')}
             onSignup={() => openAuthModal('signup')}
             onLogout={signOut}
+            currentCity={currentCity}
+            onCitySelect={(city) => setSelectedCity(city)}
           />
         </div>
 
