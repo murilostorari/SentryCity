@@ -23,7 +23,8 @@ import {
 } from './newsAnalysis';
 import { geocodeAddress } from './geocoding';
 import { extractArticleFromUrl } from './articleExtractor';
-import { IncidentRow } from './incidents';
+import { IncidentRow, findNearbyIncident, MergeResult } from './incidents';
+import { createIncidentReport } from './incidentReports';
 import { Incident } from '../types/Incident';
 
 /** Resultado da análise de uma notícia (antes da confirmação do incidente). */
@@ -209,14 +210,64 @@ async function runIngestion({
   };
 }
 
-/** Etapa 2: confirma a criação do incidente + salva ai_analysis + marca raw_report. */
-export async function confirmIngestion(input: ConfirmIngestionInput): Promise<Incident> {
-  // 4. Criar o incidente
-  const incidentRow = await createIncidentFromIngestion(input);
+/** Etapa 2: confirma a criação do incidente + salva ai_analysis + marca raw_report.
+ *  Se houver incidente existente do mesmo tipo a ≤200m, faz merge (cria relato confirm). */
+export async function confirmIngestion(input: ConfirmIngestionInput): Promise<MergeResult> {
+  // Verificar se já existe incidente próximo do mesmo tipo
+  const nearby = await findNearbyIncident(input.lat, input.lng, input.analysis.type);
 
-  // 5a. Salvar a resposta da IA em ai_analysis
+  let incidentRow: Incident;
+
+  if (nearby) {
+    // Merge: cria relato de confirmação no incidente existente
+    await createIncidentReport({
+      incident_id: nearby.id,
+      type: 'confirm',
+      comment: `Relato via noticia (${input.source ?? 'desconhecida'})`,
+    });
+
+    // Mapeia o incidente existente
+    const timestamp = new Date(nearby.created_at).getTime();
+    incidentRow = {
+      id: nearby.id,
+      lat: nearby.latitude,
+      lng: nearby.longitude,
+      type: nearby.type,
+      severity: nearby.severity,
+      status: nearby.status,
+      title: nearby.title,
+      description: nearby.description ?? '',
+      address: [nearby.address, nearby.city, nearby.state].filter(Boolean).join(', '),
+      source: nearby.source,
+      time: new Date(nearby.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      radius: 100,
+      timestamp,
+      resolvedAt: nearby.resolved_at ? new Date(nearby.resolved_at).getTime() : null,
+      expiresAt: nearby.expires_at ? new Date(nearby.expires_at).getTime() : null,
+      created_by: nearby.created_by,
+    };
+
+    // Salvar a resposta da IA vinculada ao incidente existente
+    await saveAiAnalysis(input, nearby.id);
+    await linkRawReport(input, nearby.id);
+
+    return { merged: true, incident: incidentRow, existingIncident: incidentRow };
+  }
+
+  // Nenhum incidente próximo → cria novo
+  incidentRow = await createIncidentFromIngestion(input);
+
+  // Salvar a resposta da IA
+  await saveAiAnalysis(input, incidentRow.id);
+  await linkRawReport(input, incidentRow.id);
+
+  return { merged: false, incident: incidentRow };
+}
+
+/** Salva a resposta da IA em ai_analysis para um incidente. */
+async function saveAiAnalysis(input: ConfirmIngestionInput, incidentId: string): Promise<void> {
   const { error: aiError } = await supabase.from('ai_analysis').insert({
-    incident_id: incidentRow.id,
+    incident_id: incidentId,
     model_name: input.model,
     prompt_version: 'v2',
     extracted_type: input.analysis.type,
@@ -228,21 +279,20 @@ export async function confirmIngestion(input: ConfirmIngestionInput): Promise<In
   });
 
   if (aiError) {
-    console.error('confirmIngestion (ai_analysis) falhou:', aiError.message);
-    // Não falha a criação do incidente; apenas registra o erro.
+    console.error('saveAiAnalysis falhou:', aiError.message);
   }
+}
 
-  // 5b. Vincular raw_report ao incidente + marcar como processado
+/** Vincula o raw_report ao incidente e marca como processado. */
+async function linkRawReport(input: ConfirmIngestionInput, incidentId: string): Promise<void> {
   const { error: processedError } = await supabase
     .from('raw_reports')
-    .update({ processed: true, incident_id: incidentRow.id })
+    .update({ processed: true, incident_id: incidentId })
     .eq('id', input.rawReportId);
 
   if (processedError) {
-    console.error('confirmIngestion (raw_reports processed) falhou:', processedError.message);
+    console.error('linkRawReport falhou:', processedError.message);
   }
-
-  return incidentRow;
 }
 
 /** Cria o incidente a partir dos dados confirmados (insert + mapeamento). */

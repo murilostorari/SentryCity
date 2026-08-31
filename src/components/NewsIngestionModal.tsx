@@ -188,7 +188,7 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
     setIsConfirming(true);
     setError(null);
     try {
-      const created = await confirmIngestion({
+      const mergeResult = await confirmIngestion({
         rawReportId: result.rawReportId,
         model: result.model,
         source: source.trim() || undefined,
@@ -205,7 +205,7 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
         lng,
         address: formatLocation(loc),
       });
-      onCreated(created);
+      onCreated(mergeResult);
       onClose();
     } catch (err: any) {
       setError(err?.message ?? 'Falha ao criar o incidente.');

@@ -15,6 +15,7 @@ import { useFilters } from './hooks/useFilters';
 import { useSearch } from './hooks/useSearch';
 import { useAuth } from './hooks/useAuth';
 import { useIncidentNews } from './hooks/useIncidentNews';
+import { useToast } from './components/Toast';
 import { Incident } from './types/Incident';
 
 type AuthMode = 'login' | 'signup' | 'reset' | 'newpassword';
@@ -30,6 +31,7 @@ export default function App() {
   } = useFilters(incidents);
   const { flyToCoordinates, currentCity, handleSearch: performSearch } = useSearch();
   const { user, profile, isAuthenticated, isLoading, signIn, signUp, signOut, resetPassword, confirmNewPassword, isPasswordRecovery } = useAuth();
+  const toast = useToast();
   const [selectedCity, setSelectedCity] = useState<{ lat: number; lng: number; name: string; state: string } | null>(null);
 
   const filteredIncidentsByCity = useMemo(() => {
@@ -82,12 +84,20 @@ export default function App() {
 
   const handleNewEvent = async (eventData: any) => {
     try {
-      const newEvent = await addIncident(eventData);
+      const result = await addIncident(eventData);
       setIsNewEventModalOpen(false);
-      setSelectedStation(newEvent.id);
+
+      if (result.merged) {
+        toast.info(
+          'Relato adicionado',
+          `Evento existente: "${result.existingIncident?.title}" já registra esta ocorrência.`,
+        );
+      }
+
+      setSelectedStation(result.incident.id);
     } catch (err) {
       console.error('Falha ao criar incidente:', err);
-      alert('Não foi possível salvar o evento. Verifique a conexão e tente novamente.');
+      toast.error('Erro', 'Não foi possível salvar o evento. Verifique a conexão e tente novamente.');
     }
   };
 
@@ -96,8 +106,14 @@ export default function App() {
     await performSearch(query);
   };
 
-  const handleNewsIngestionCreated = async () => {
+  const handleNewsIngestionCreated = async (mergeResult?: { merged: boolean; incident?: any; existingIncident?: any }) => {
     await refresh();
+    if (mergeResult?.merged) {
+      toast.info(
+        'Relato adicionado',
+        `Evento existente: "${mergeResult.existingIncident?.title}" já registra esta ocorrência.`,
+      );
+    }
   };
 
   const selectedIncident = incidents.find(i => i.id === selectedStation);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Incident } from '../types/Incident';
-import { fetchIncidents, createIncident, CreateIncidentInput } from '../services/incidents';
+import { fetchIncidents, mergeOrCreateIncident, CreateIncidentInput, MergeResult } from '../services/incidents';
 
 /**
  * Hook central de incidentes.
@@ -35,10 +35,10 @@ export function useIncidents() {
   }, [refresh]);
 
   /**
-   * Cria um incidente real no Supabase. Recebe os dados vindos do modal
-   * (que usa lat/lng) e os converte para o formato do serviço.
+   * Cria um incidente ou faz merge com um existente do mesmo tipo e proximidade.
+   * Retorna o resultado completo para que o caller saiba se houve merge.
    */
-  const addIncident = async (eventData: any): Promise<Incident> => {
+  const addIncident = async (eventData: any): Promise<MergeResult> => {
     const input: CreateIncidentInput = {
       title: eventData.title,
       description: eventData.description,
@@ -55,10 +55,17 @@ export function useIncidents() {
       confidence_score: eventData.confidence_score,
     };
 
-    const created = await createIncident(input);
-    // Insere no topo da lista para refletir imediatamente no mapa/alertas.
-    setIncidents((prev) => [created, ...prev]);
-    return created;
+    const result = await mergeOrCreateIncident(input);
+
+    if (result.merged) {
+      // Recarrega a lista para refletir o novo relato no incidente existente.
+      await refresh();
+    } else {
+      // Insere o novo incidente no topo da lista.
+      setIncidents((prev) => [result.incident, ...prev]);
+    }
+
+    return result;
   };
 
   return {
