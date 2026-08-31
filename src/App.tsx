@@ -29,7 +29,7 @@ export default function App() {
     typeFilter, setTypeFilter
   } = useFilters(incidents);
   const { flyToCoordinates, currentCity, handleSearch: performSearch } = useSearch();
-  const { user, profile, isAuthenticated, isLoading, signIn, signUp, signOut, resetPassword, confirmNewPassword, checkAuthCallback } = useAuth();
+  const { user, profile, isAuthenticated, isLoading, signIn, signUp, signOut, resetPassword, confirmNewPassword, isPasswordRecovery } = useAuth();
   const [selectedCity, setSelectedCity] = useState<{ lat: number; lng: number; name: string; state: string } | null>(null);
 
   const filteredIncidentsByCity = useMemo(() => {
@@ -65,18 +65,13 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Detecta link de redefinição de senha (parâmetro ?code na URL).
+  // Quando o Supabase detecta um link de redefinição de senha (hash #access_token),
+  // emite PASSWORD_RECOVERY → abre o modal para definir nova senha.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('code')) {
-      // Troca o código por sessão e abre o modal para definir nova senha.
-      checkAuthCallback().then(({ session, error }) => {
-        if (session && !error) {
-          openAuthModal('newpassword');
-        }
-      });
+    if (isPasswordRecovery) {
+      openAuthModal('newpassword');
     }
-  }, []);
+  }, [isPasswordRecovery]);
 
   const handleSelectStation = (id: string | null) => {
     setSelectedStation(id);

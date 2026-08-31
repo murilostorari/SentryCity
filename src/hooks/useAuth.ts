@@ -12,7 +12,6 @@ import {
   upsertProfile,
   sendPasswordReset,
   updatePassword,
-  handleAuthCallback,
 } from '../services/auth';
 
 /**
@@ -27,6 +26,7 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   /** Recarrega o profile do usuário atual. */
   const refreshProfile = useCallback(async (uid: string) => {
@@ -57,8 +57,11 @@ export function useAuth() {
   useEffect(() => {
     refresh();
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
+      }
       if (session?.user) {
         refreshProfile(session.user.id);
       } else {
@@ -122,24 +125,19 @@ export function useAuth() {
     return result;
   }, [refresh]);
 
-  const checkAuthCallback = useCallback(async () => {
-    setError(null);
-    return handleAuthCallback();
-  }, []);
-
   return {
     user,
     profile,
     isLoading,
     error,
     isAuthenticated: !!user,
+    isPasswordRecovery,
     signUp,
     signIn,
     signOut,
     updateName,
     resetPassword,
     confirmNewPassword,
-    checkAuthCallback,
     refresh,
     refreshProfile,
   };
