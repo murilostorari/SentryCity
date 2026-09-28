@@ -112,7 +112,7 @@ export async function fetchIncidentReports(incidentId: string): Promise<Incident
   return data as IncidentReportRow[];
 }
 
-/** Cria um novo relato para um incidente. */
+/** Cria ou atualiza um relato para um incidente (upsert na constraint unique). */
 export async function createIncidentReport(input: CreateIncidentReportInput): Promise<IncidentReportRow> {
   // Usuário autenticado atual (se houver) para vincular o relato.
   const { data: authData } = await supabase.auth.getUser();
@@ -127,7 +127,10 @@ export async function createIncidentReport(input: CreateIncidentReportInput): Pr
 
   const { data, error } = await supabase
     .from('incident_reports')
-    .insert(payload)
+    .upsert(payload, {
+      onConflict: 'incident_id,user_id,type',
+      ignoreDuplicates: false,
+    })
     .select('*')
     .single();
 

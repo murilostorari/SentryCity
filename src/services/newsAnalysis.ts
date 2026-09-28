@@ -1,8 +1,8 @@
 /**
  * Serviço de Análise de Notícias por IA (OSINT)
  * --------------------------------------------------------------------------
- * Recebe o texto de uma notícia e extrai, via uma LLM gratuita hospedada no
- * OpenRouter (DeepSeek / Qwen / Nemotron), um objeto estruturado com os campos
+ * Recebe o texto de uma notícia e extrai, via uma LLM hospedada no
+ * Groq API (qwen/qwen3.8-27b e outros), um objeto estruturado com os campos
  * necessários para criar um incidente.
  *
  * Este módulo já está preparado para uso futuro: se a chave da API não estiver
@@ -34,18 +34,19 @@ export interface NewsAnalysisResult {
   location_precision: LocationPrecision;
 }
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-// Modelos gratuitos disponíveis no OpenRouter. Basta trocar para alternar.
+// Modelos disponíveis no Groq API. Basta trocar para alternar.
 export const FREE_MODELS = {
-  deepseek: 'deepseek/deepseek-chat-v3.1:free',
-  qwen: 'qwen/qwen-2.5-72b-instruct:free',
-  nemotron: 'nvidia/nemotron-nano-9b-v2:free',
+  qwen: 'qwen/qwen3.8-27b',
+  llama8b: 'llama-3.1-8b-instant',
+  llama70b: 'llama-3.3-70b-versatile',
+  gptoss: 'openai/gpt-oss-20b',
 } as const;
 
-const DEFAULT_MODEL = FREE_MODELS.deepseek;
+const DEFAULT_MODEL = FREE_MODELS.qwen;
 
-/** Retorna o modelo configurado via variável de ambiente (AI_PRODUCT_MODEL), ou o default. */
+/** Retorna o modelo configurado via variável de ambiente (AI_PRODUCT_MODEL), ou o default do Groq. */
 export function getActiveModel(): string {
   return (process.env.AI_PRODUCT_MODEL as string | undefined)?.trim() || DEFAULT_MODEL;
 }
@@ -220,17 +221,17 @@ export function buildGeocodeQueryByPrecision(
  * Analisa o texto de uma notícia e retorna os dados estruturados do incidente.
  *
  * @param newsText  Texto completo (ou trecho) da notícia.
- * @param model     Modelo do OpenRouter a usar (padrão: DeepSeek gratuito).
+ * @param model     Modelo do Groq API a usar (padrão: qwen/qwen3.8-27b).
  */
 export async function analyzeNewsText(
   newsText: string,
   model: string = getActiveModel()
 ): Promise<NewsAnalysisResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY as string | undefined;
+  const apiKey = process.env.GROQ_API_KEY as string | undefined;
 
   if (!apiKey) {
     throw new Error(
-      'OPENROUTER_API_KEY não configurada. Adicione a variável de ambiente para habilitar a análise por IA.'
+      'GROQ_API_KEY não configurada. Adicione a variável de ambiente para habilitar a análise por IA.'
     );
   }
   if (!newsText || newsText.trim().length < 10) {
@@ -249,7 +250,7 @@ export async function analyzeNewsText(
 
   // Alguns modelos (ex: reasoning do NVIDIA) não suportam response_format.
   // Tentamos primeiro com JSON mode; se a API recusar, repetimos sem ele.
-  let res = await fetch(OPENROUTER_URL, {
+  let res = await fetch(GROQ_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -259,7 +260,7 @@ export async function analyzeNewsText(
   });
 
   if (!res.ok && res.status >= 400 && res.status < 500) {
-    res = await fetch(OPENROUTER_URL, {
+    res = await fetch(GROQ_URL, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -271,7 +272,7 @@ export async function analyzeNewsText(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    throw new Error(`OpenRouter respondeu ${res.status}: ${detail}`);
+    throw new Error(`Groq API respondeu ${res.status}: ${detail}`);
   }
 
   const data = await res.json();
