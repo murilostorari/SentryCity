@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Orquestra o fluxo completo de ingestão de uma notícia:
  *  1. Salva o texto original em `raw_reports`;
- *  2. Analisa com a LLM via OpenRouter (`newsAnalysis.ts`);
+ *  2. Analisa com a LLM via Groq API (`newsAnalysis.ts`);
  *  3. Geocodifica a localização extraída (`geocoding.ts`) usando apenas
  *     street + neighborhood + city + state;
  *  4. Cria o incidente em `incidents`;
@@ -134,7 +134,7 @@ async function runIngestion({
 
   const rawReportId = rawReport.id as string;
 
-  // 2. Analisar com IA via OpenRouter
+   // 2. Analisar com IA via Groq API
   const tAi = performance.now();
   let analysis: NewsAnalysisResult | null = null;
   let aiAnalyzed = false;

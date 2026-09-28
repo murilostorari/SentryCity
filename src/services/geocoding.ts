@@ -114,7 +114,7 @@ async function geocodeWithNominatim(
       const res = await fetch(url, { headers: { Accept: 'application/json' } });
       if (res.status === 429) {
         // Rate limit: espera antes de tentar de novo.
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 500));
         continue;
       }
       if (!res.ok) return null;

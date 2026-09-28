@@ -44,7 +44,7 @@ export const FREE_MODELS = {
   gptoss: 'openai/gpt-oss-20b',
 } as const;
 
-const DEFAULT_MODEL = FREE_MODELS.qwen;
+const DEFAULT_MODEL = FREE_MODELS.llama8b;
 
 /** Retorna o modelo configurado via variável de ambiente (AI_PRODUCT_MODEL), ou o default do Groq. */
 export function getActiveModel(): string {
