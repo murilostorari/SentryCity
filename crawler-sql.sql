@@ -1,7 +1,8 @@
 -- SQL Crawler for SentryCity
 -- Uses http extension (synchronous) with browser-like headers
--- Schedule: SELECT cron.schedule('sql-crawler', '*/30 * * * *', 'SELECT run_sql_crawler()')
+-- Stores Groq API key in crawler_config table (NOT hardcoded for security)
 
+-- Helper: URL decode percent-encoded strings
 CREATE OR REPLACE FUNCTION public.url_decode(s text)
 RETURNS text
 LANGUAGE plpgsql AS $$
@@ -20,7 +21,30 @@ BEGIN
   result := Replace(result, '%29', ')');
   result := Replace(result, '%2B', '+');
   result := Replace(result, '%20', ' ');
+  result := Replace(result, '%2D', '-');
   return result;
+END;
+$$;
+
+-- Config table for API keys (set via SQL, not in migrations)
+CREATE TABLE IF NOT EXISTS public.crawler_config (
+  key_name  text PRIMARY KEY,
+  key_value text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+COMMENT ON TABLE public.crawler_config IS 'Stores API keys for crawler (set via SQL, not version controlled)';
+
+-- Helper to get API key
+CREATE OR REPLACE FUNCTION public.get_crawler_key(name text)
+RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE
+  result text;
+BEGIN
+  SELECT key_value INTO result FROM public.crawler_config WHERE key_name = name;
+  RETURN result;
 END;
 $$;
 
@@ -45,8 +69,18 @@ DECLARE
   stat_created int := 0;
   stat_errors text[] := '{}';
   browser_ua text := 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  groq_api_key text;
   groq_body text;
 BEGIN
+  -- Get Groq API key from config (NOT hardcoded)
+  groq_api_key := public.get_crawler_key('groq_api_key');
+  IF groq_api_key IS NULL THEN
+    RETURN jsonb_build_object(
+      'feeds', 0, 'found', 0, 'relevant', 0, 'created', 0,
+      'errors', array_append(stat_errors, 'Groq API key not configured in crawler_config')
+    );
+  END IF;
+
   FOR feed_rec IN
     SELECT url, name FROM public.crawler_feeds
     WHERE source_type = 'jina_search' AND is_active = true
@@ -67,8 +101,7 @@ BEGIN
          '')::http_request
       );
 
-      -- Short delay between feeds
-      PERFORM pg_sleep(2);
+      PERFORM pg_sleep(1);
 
       IF ddg_result.status != 200 THEN
         stat_errors := array_append(stat_errors, 'DDG: ' || ddg_result.status);
@@ -77,14 +110,12 @@ BEGIN
 
       html_content := COALESCE(ddg_result.content, '');
 
-      -- 2. Extract URLs (DDG redirect format: uddg=...)
-      -- Use CTE because regexp_matches in FOR loop doesn't work in PL/pgSQL
+      -- 2. Extract URLs (DDG redirect format: uddg=...), limit 8 per feed
       FOR single_url IN
         WITH url_matches AS (
           SELECT (regexp_matches(html_content, 'uddg=([^ &"<>]+)', 'g'))[1] as raw_url
         )
-        SELECT public.url_decode(raw_url) as url FROM url_matches
-        LIMIT 8
+        SELECT public.url_decode(raw_url) as url FROM url_matches LIMIT 8
       LOOP
         IF single_url IS NULL OR single_url NOT LIKE 'https://%' THEN
           CONTINUE;
@@ -102,12 +133,12 @@ BEGIN
           CONTINUE;
         END IF;
 
-        -- 4. Stage 1: Groq relevance filter
+        -- 4. Groq relevance filter (Stage 1)
         groq_body := jsonb_build_object(
           'model', 'qwen/qwen3.8-27b',
           'messages', jsonb_build_array(
             jsonb_build_object('role', 'system', 'content',
-              'Você é um filtro de relevância OSINT para json. Relevante: acidentes de trânsito, falta de energia, chuvas fortes, alagamentos, buracos, violência, interdição de vias, eventos que impactam mobilidade. Não relevante: política, entretenimento, celebridades, esportes. Responda JSON: {"relevant":true,"type":"accident","reason":"breve"}'
+              'Você é um filtro OSINT para json. Relevante: acidentes, energia, chuva, alagamento, buraco, violência, interdição. Não relevante: política, entretenimento. JSON: {"relevant":true,"type":"accident","reason":"ok"}'
             ),
             jsonb_build_object('role', 'user', 'content',
               'Verifique se esta URL é sobre um incidente urbano relevante: ' || single_url
@@ -122,7 +153,7 @@ BEGIN
           ('POST',
            'https://api.groq.com/openai/v1/chat/completions',
            array[
-             http_header('Authorization', 'Bearer YOUR_GROQ_API_KEY_HERE'),
+             http_header('Authorization', 'Bearer ' || groq_api_key),
              http_header('Content-Type', 'application/json'),
              http_header('User-Agent', browser_ua)
            ],
@@ -130,7 +161,6 @@ BEGIN
            groq_body)::http_request
         );
 
-        -- Delay between Groq calls (avoid rate limit)
         PERFORM pg_sleep(2);
 
         IF groq_result.status != 200 THEN
@@ -145,7 +175,7 @@ BEGIN
           incident_type := groq_json->>'type';
         EXCEPTION WHEN OTHERS THEN
           relevant := false;
-          stat_errors := array_append(stat_errors, 'Parse: ' || sqlerrm || ' | content: ' || left(coalesce(groq_result.content, 'NULL'), 200));
+          stat_errors := array_append(stat_errors, 'Parse: ' || sqlerrm);
           CONTINUE;
         END;
 
@@ -155,7 +185,7 @@ BEGIN
 
         stat_relevant := stat_relevant + 1;
 
-        -- 5. Create raw_report + incident
+        -- 5. Create raw_report
         INSERT INTO public.raw_reports(
           original_text, original_url, url_hash, title, source_name,
           published_at, processed
@@ -164,9 +194,9 @@ BEGIN
           'Incidente via SQL Crawler', 'SQL Crawler DDG',
           now(), false
         )
-          ON CONFLICT (url_hash) DO NOTHING;
+        ON CONFLICT (url_hash) DO NOTHING;
 
-        -- 6. Create incident (skip if already exists)
+        -- 6. Create incident
         IF NOT EXISTS(SELECT 1 FROM public.incidents WHERE title LIKE '%' || single_url) THEN
           INSERT INTO public.incidents(
             title, description, type, severity, status,
@@ -181,8 +211,6 @@ BEGIN
           );
           stat_created := stat_created + 1;
         END IF;
-
-        stat_created := stat_created + 1;
 
       END LOOP;
 
@@ -201,4 +229,4 @@ BEGIN
 END;
 $func$;
 
-COMMENT ON FUNCTION public.run_sql_crawler() IS 'Crawler OSINT puro SQL: DuckDuckGo→Groq→Incidentes. Via pg_cron: SELECT cron.schedule("sql-crawler", "*/30 * * * *", "SELECT run_sql_crawler()")';
+COMMENT ON FUNCTION public.run_sql_crawler() IS 'Crawler OSINT puro SQL: DuckDuckGo→Groq→Incidentes. Config key: INSERT INTO crawler_config VALUES (''groq_api_key'', ''sua_key'')';
