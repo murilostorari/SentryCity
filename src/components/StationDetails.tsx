@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, Edit3, User as UserIcon } from 'lucide-react';
+import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, Edit3, User as UserIcon, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, ResponsiveContainer, AreaChart, Area, CartesianGrid, YAxis } from 'recharts';
 import { Incident, ReportCounts, TimelineItem, ReportType, HourlyFrequencyData, ConfidenceDetails } from '../types/Incident';
 import { useIncidentReports, getReportTypeLabel as getReportTypeLabelFn, getReportTypeStyle as getReportTypeStyleFn, formatRelativeTime as formatRelativeTimeFn } from '../hooks/useIncidentReports';
+import { getHoursUntilAutoResolve, getAutoResolveDeadline, bumpIncidentActivity } from '../services/incidents';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '@supabase/supabase-js';
 import { Profile } from '../types/Profile';
@@ -55,6 +56,44 @@ export default function StationDetails({
 }) {
   const [activeTab, setActiveTab] = useState('Detalhes');
   const [reportModal, setReportModal] = useState<{ type: ReportType | null; comment: string }>({ type: null, comment: '' });
+  const [isBumping, setIsBumping] = useState(false);
+  const [bumpError, setBumpError] = useState<string | null>(null);
+  const [bumpSuccess, setBumpSuccess] = useState(false);
+  const [countdown, setCountdown] = useState<{ label: string; ms: number } | null>(null);
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      if (incident.status === 'resolved' && incident.expiresAt) {
+        const ms = incident.expiresAt - Date.now();
+        if (ms > 0) {
+          setCountdown({ label: 'Sai do mapa em', ms });
+        } else {
+          setCountdown(null);
+        }
+        return;
+      }
+      if (incident.status === 'active' || incident.status === 'pending') {
+        const hours = getHoursUntilAutoResolve(incident);
+        if (hours > 0) {
+          const ms = getAutoResolveDeadline(incident)! - Date.now();
+          setCountdown({ label: 'Auto-resolve em', ms });
+        } else {
+          setCountdown(null);
+        }
+      }
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 30000);
+    return () => clearInterval(interval);
+  }, [incident.id, incident.status, incident.timestamp, incident.expiresAt]);
+
+  const formatCountdown = (ms: number): string => {
+    if (ms <= 0) return '0h 0m';
+    const totalMin = Math.floor(ms / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return `${h}h ${m}m`;
+  };
   
   const { 
     counts, 
@@ -167,6 +206,27 @@ export default function StationDetails({
     closeReportModal();
   };
 
+  const handleBumpActivity = async () => {
+    if (!isAuthenticated) {
+      onRequireAuth?.();
+      return;
+    }
+    setIsBumping(true);
+    setBumpError(null);
+    setBumpSuccess(false);
+    try {
+      await bumpIncidentActivity(incident.id);
+      setBumpSuccess(true);
+      setBumpError(null);
+      refresh();
+      setTimeout(() => setBumpSuccess(false), 3000);
+    } catch (err: any) {
+      setBumpError(err?.message ?? 'Falha ao confirmar presença.');
+    } finally {
+      setIsBumping(false);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-xl shadow-2xl h-full flex flex-col overflow-hidden transition-colors duration-300">
       {/* Header */}
@@ -183,6 +243,43 @@ export default function StationDetails({
               <MapPin size={12} className="shrink-0" />
               <span className="truncate">{incident.address || `${incident.lat.toFixed(4)}, ${incident.lng.toFixed(4)}`}</span>
             </div>
+
+            {/* Lifecycle: countdown + confirmar ativo */}
+            {(incident.status === 'active' || incident.status === 'pending') && countdown && countdown.ms > 0 && (
+              <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                  <Clock size={12} />
+                  <span>{countdown.label}: {formatCountdown(countdown.ms)}</span>
+                </div>
+                <button
+                  onClick={handleBumpActivity}
+                  disabled={isBumping}
+                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium flex items-center gap-1 transition-colors"
+                  title="Confirmar que o incidente ainda está ativo"
+                >
+                  {isBumping ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                  Confirmar ativo
+                </button>
+              </div>
+            )}
+
+            {bumpSuccess && (
+              <div className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                <CheckCircle size={12} />
+                Atividade confirmada! Timer reiniciado.
+              </div>
+            )}
+
+            {bumpError && (
+              <div className="mt-1 text-xs text-red-500">{bumpError}</div>
+            )}
+
+            {incident.status === 'resolved' && countdown && countdown.ms > 0 && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-[#888888]">
+                <Clock size={12} />
+                <span>{countdown.label}: {formatCountdown(countdown.ms)}</span>
+              </div>
+            )}
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center text-gray-500 dark:text-[#888888] hover:text-black dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#333333] transition-colors shrink-0">
             <X size={16} />

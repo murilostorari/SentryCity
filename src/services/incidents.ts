@@ -123,6 +123,105 @@ export async function fetchIncidents(): Promise<Incident[]> {
   return (data as IncidentRow[]).map(mapRowToIncident);
 }
 
+// ---------------------------------------------------------------------------
+// Lifecycle: auto-resolução & interação do usuário
+// ---------------------------------------------------------------------------
+
+/** Horas de inatividade antes de auto-resolver, por tipo de incidente. */
+export const AUTO_RESOLVE_HOURS: Record<string, number> = {
+  accident: 72,
+  power: 72,
+  weather: 48,
+  pothole: 168,
+  show: 168,
+  party: 48,
+  noise: 48,
+  inauguration: 24,
+  other: 24,
+};
+
+/** Horas que um incidente 'resolved' fica visível no mapa depois de resolvido. */
+export const RESOLVED_VISIBILITY_HOURS: Record<string, number> = {
+  accident: 48,
+  power: 48,
+  weather: 24,
+  pothole: 168,
+  show: 72,
+  party: 24,
+  noise: 24,
+  inauguration: 12,
+  other: 24,
+};
+
+/** Retorna as horas de auto-resolução para um tipo (default 24h). */
+export function getAutoResolveHours(type: string): number {
+  return AUTO_RESOLVE_HOURS[type] ?? 24;
+}
+
+/** Retorna as horas de visibilidade pós-resolução para um tipo (default 24h). */
+export function getResolvedVisibilityHours(type: string): number {
+  return RESOLVED_VISIBILITY_HOURS[type] ?? 24;
+}
+
+/** Calcula o timestamp (ms) em que o incidente será auto-resolvido. */
+export function getAutoResolveDeadline(incident: Incident): number | null {
+  const hours = getAutoResolveHours(incident.type);
+  return incident.timestamp + hours * 3600 * 1000;
+}
+
+/** Horas restantes antes da auto-resolução (número positivo ou 0). */
+export function getHoursUntilAutoResolve(incident: Incident): number {
+  if (incident.status === 'resolved') return 0;
+  const deadline = getAutoResolveDeadline(incident);
+  if (!deadline) return 0;
+  return Math.max(0, (deadline - Date.now()) / (1000 * 60 * 60));
+}
+
+/**
+ * Usuário confirma que o incidente ainda está ativo.
+ * Insere um relato 'confirm' para renovar o timer de auto-resolução.
+ * Requer usuário autenticado.
+ */
+export async function bumpIncidentActivity(incidentId: string): Promise<void> {
+  const { error } = await supabase.rpc('bump_incident_activity', {
+    p_incident_id: incidentId,
+  });
+
+  if (error) {
+    console.error('bumpIncidentActivity falhou:', error.message);
+    throw new Error(error.message);
+  }
+}
+
+/**
+ * Marca o incidente como 'resolved' (staff only — admin/analyst).
+ * Ativa os triggers existentes de resolved_at/expires_at (migration 0008).
+ */
+export async function resolveIncident(incidentId: string): Promise<void> {
+  const { error } = await supabase.rpc('resolve_incident', {
+    p_incident_id: incidentId,
+  });
+
+  if (error) {
+    console.error('resolveIncident falhou:', error.message);
+    throw new Error(error.message);
+  }
+}
+
+/**
+ * Chama a função que resolve incidentes inativos automaticamente.
+ * Ideal para ser chamada por uma Edge Function ou pg_cron periodicamente.
+ */
+export async function runAutoResolveJob(): Promise<number> {
+  const { data, error } = await supabase.rpc('auto_resolve_inactive_incidents');
+
+  if (error) {
+    console.error('auto_resolve_inactive_incidents falhou:', error.message);
+    throw new Error(error.message);
+  }
+  return data as number;
+}
+
 /**
  * Cria um incidente no banco e retorna o registro já mapeado para o frontend.
  * O status default é 'active' (evento criado manualmente e vigente).

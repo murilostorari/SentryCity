@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { X, Loader2, Sparkles, Newspaper, MapPin, Check, ChevronDown, Save, AlertTriangle, RefreshCw, Link } from 'lucide-react';
+import { X, Loader2, Sparkles, Newspaper, MapPin, Check, ChevronDown, Save, AlertTriangle, RefreshCw, Link, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ResponsiveModal from './ResponsiveModal';
 import ModalTabs from './ModalTabs';
 import { ingestNewsText, ingestNewsUrl, confirmIngestion, NewsIngestionResult } from '../services/newsIngestion';
 import { geocodeAddress, fetchByCep } from '../services/geocoding';
 import { buildGeocodeQuery, formatLocation, NewsLocation, LocationPrecision } from '../services/newsAnalysis';
+import { getAutoResolveHours } from '../services/incidents';
 
 interface NewsIngestionModalProps {
   isOpen: boolean;
@@ -349,6 +350,17 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
               <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 ${isDarkMode ? 'bg-[#1A1A1A] text-[#888888]' : 'bg-gray-50 text-gray-500'}`}>
                 <MapPin size={12} />
                 <span>Precisão: <strong>{translatePrecision(locationPrecision)}</strong></span>
+              </div>
+            )}
+
+            {/* Timer de expiração automática (preview antes de confirmar) */}
+            {lat != null && lng != null && (
+              <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${isDarkMode ? 'bg-[#3A2D1D] border-[#4A3A1D] text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                <Clock size={12} />
+                <span>
+                  Auto-resolve em ~{getAutoResolveHours(type)}h
+                  <span className="opacity-60"> (sem confirmações recentes)</span>
+                </span>
               </div>
             )}
 
