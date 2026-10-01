@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
       'process.env.GOOGLE_MAPS_API_KEY': JSON.stringify(env.GOOGLE_MAPS_API_KEY),
       'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_URL),
       'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-      'process.env.GROQ_API_KEY': JSON.stringify(env.GROQ_API_KEY),
+      'process.env.GROQ_API_KEY': JSON.stringify(process.env.GROQ_API_KEY || env.GROQ_API_KEY || ''),
       'process.env.AI_PRODUCT_MODEL': JSON.stringify(env.AI_PRODUCT_MODEL),
       'process.env.AI_PRODUCT_PROVIDER': JSON.stringify(env.AI_PRODUCT_PROVIDER),
     },
