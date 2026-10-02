@@ -511,7 +511,11 @@ function DetailsTab({
         <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-4 uppercase">Informações do Incidente</h3>
         <div className="space-y-4">
           <DetailRow label="Tipo" value={translateType(incident.type)} />
-          <DetailRow label="Fonte" value={incident.source || incident.news?.[0]?.source || 'Manual'} />
+          <DetailRow label="Fonte" value={(() => {
+            const primary = (incident.source || '').split(' | ')[0].trim() || incident.news?.[0]?.source || 'Manual';
+            const extraCount = new Set((incident.news || []).map(n => n.source).filter(s => s && s !== primary)).size;
+            return extraCount > 0 ? `${primary} +${extraCount}` : primary;
+          })()} />
           <DetailRow label="Status" value={<span className={`${getSeverityTextColor(incident.severity)} flex items-center gap-1.5`}><div className={`w-1.5 h-1.5 rounded-full ${getSeverityDotColor(incident.severity)} animate-pulse`}></div>{translateStatus(incident.status)}</span>} />
           <DetailRow label="ID" value={<div className="flex items-center justify-between w-full"><span>{incident.id}</span><Copy size={14} className="text-gray-400 dark:text-[#666666] cursor-pointer hover:text-black dark:hover:text-white transition-colors" /></div>} hasInfo />
           <DetailRow label="Severidade" value={translateSeverity(incident.severity)} />

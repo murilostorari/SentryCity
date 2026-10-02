@@ -120,11 +120,18 @@ DECLARE
   geo_json jsonb;
   lat numeric := 0;
   lng numeric := 0;
-  stat_feeds int := 0;
-  stat_found int := 0;
-  stat_relevant int := 0;
-  stat_created int := 0;
-  stat_errors text[] := '{}';
+   stat_feeds int := 0;
+   stat_found int := 0;
+   stat_relevant int := 0;
+   stat_created int := 0;
+   stat_merged int := 0;
+   v_merge_id uuid;
+   v_merge_same boolean := false;
+   v_same_body text;
+   v_same_response text;
+   existing_title text;
+   existing_desc text;
+   stat_errors text[] := '{}';
   ai_title text;
   ai_description text;
   ai_severity text;
@@ -339,8 +346,8 @@ BEGIN
             ai_state := 'SP';
             ai_confidence := 0.3;
             ai_street := '';
-            lat := -22.32;
-            lng := -49.99;
+            lat := -21.6866517;
+            lng := -51.0762975;
           ELSE
             groq_json := ((groq_response::jsonb)->'choices'->0->'message'->>'content')::jsonb;
             ai_title := groq_json->>'title';
@@ -362,8 +369,8 @@ BEGIN
           ai_state := 'SP';
           ai_confidence := 0.3;
           ai_street := '';
-          lat := -22.32;
-          lng := -49.99;
+          lat := -21.6866517;
+          lng := -51.0762975;
         END;
 
         -- Defaults
@@ -430,8 +437,8 @@ BEGIN
         END;
 
         IF lat = 0 OR lng = 0 THEN
-          lat := -22.32;
-          lng := -49.99;
+          lat := -21.6866517;
+          lng := -51.0762975;
         END IF;
 
         -- Determine display source name: use <source> tag if available, else feed name or URL domain
@@ -449,7 +456,71 @@ BEGIN
         -- Create incident (source = "SourceName | ArticleURL")
         v_source_display := v_display_source || ' | ' || original_url;
 
-        IF NOT EXISTS(SELECT 1 FROM public.incidents WHERE source = v_source_display) THEN
+        -- Merge candidate: same type, active, within 200m, created in last 24h
+        v_merge_id := NULL;
+        v_merge_same := false;
+        SELECT id INTO v_merge_id
+        FROM public.incidents
+        WHERE type = ai_type
+          AND status = 'active'
+          AND created_at > now() - interval '24 hours'
+          AND latitude IS NOT NULL AND longitude IS NOT NULL
+          AND 6371000 * acos(least(1.0,
+                cos(radians(latitude)) * cos(radians(lat))
+                * cos(radians(lng) - radians(longitude))
+                + sin(radians(latitude)) * sin(radians(lat))
+              )) <= 200
+        ORDER BY created_at DESC
+        LIMIT 1;
+
+        -- AI confirmation: is it really the same event?
+        IF v_merge_id IS NOT NULL THEN
+          SELECT title, COALESCE(description, '') INTO existing_title, existing_desc
+          FROM public.incidents WHERE id = v_merge_id;
+
+          v_same_body := jsonb_build_object(
+            'model', 'qwen/qwen3.8-27b',
+            'messages', jsonb_build_array(
+              jsonb_build_object('role', 'system', 'content',
+                'Você compara duas notícias sobre possivelmente o mesmo incidente urbano. Responda SOMENTE JSON: {"same": true|false}. Responda true APENAS se forem sobre o mesmo acontecimento (mesmo local, mesma situação, mesmo evento), mesmo que títulos ou fontes difiram. Responda false se forem acontecimentos distintos, ainda que parecidos.'),
+              jsonb_build_object('role', 'user', 'content',
+                'NOTÍCIA A (já registrada): ' || left(existing_title, 300) || ' | ' || left(existing_desc, 400) ||
+                ' || NOTÍCIA B (nova): ' || left(ai_title, 300) || ' | ' || left(ai_description, 400))
+            ),
+            'temperature', 0.1,
+            'max_tokens', 50,
+            'response_format', jsonb_build_object('type', 'json_object')
+          )::text;
+
+          v_same_response := public.http_post_json(
+            'https://api.groq.com/openai/v1/chat/completions', v_same_body, groq_api_key, browser_ua
+          );
+          PERFORM pg_sleep(1);
+
+          BEGIN
+            v_merge_same := COALESCE(
+              (((v_same_response::jsonb)->'choices'->0->'message'->>'content')::jsonb->>'same')::boolean,
+              false
+            );
+          EXCEPTION WHEN OTHERS THEN
+            v_merge_same := false;
+          END;
+
+          IF NOT v_merge_same THEN
+            v_merge_id := NULL;
+          END IF;
+        END IF;
+
+        IF v_merge_id IS NOT NULL THEN
+          -- MERGE: reuse existing incident — new source becomes another NewsCard
+          v_incident_id := v_merge_id;
+
+          INSERT INTO public.incident_reports (incident_id, user_id, type, comment)
+          VALUES (v_merge_id, NULL, 'confirm', 'Notícia relacionada via crawler: ' || v_display_source);
+
+          stat_merged := stat_merged + 1;
+
+        ELSIF NOT EXISTS(SELECT 1 FROM public.incidents WHERE source = v_source_display) THEN
            INSERT INTO public.incidents(
              title, description, type, severity, status,
              latitude, longitude, address, city, state,
@@ -499,6 +570,7 @@ BEGIN
     'found', stat_found,
     'relevant', stat_relevant,
     'created', stat_created,
+    'merged', stat_merged,
     'errors', stat_errors
   );
 END;
