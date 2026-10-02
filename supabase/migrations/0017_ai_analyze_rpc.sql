@@ -36,7 +36,7 @@ BEGIN
     'response_format', jsonb_build_object('type', 'json_object')
   )::text;
 
-  -- Retry up to 2 times (Groq can be flaky)
+  -- Retry up to 3 times (Groq can be flaky)
   FOR attempt IN 1..3 LOOP
     groq_response := public.http_post_json(
       'https://api.groq.com/openai/v1/chat/completions',
@@ -54,6 +54,19 @@ BEGIN
     -- Check if Groq returned an error
     IF groq_json ? 'error' THEN
       err_msg := groq_json->'error'->>'message';
+      -- Invalid model: rebuild body with the default model and retry
+      IF coalesce(groq_json->'error'->>'code', '') = 'model_not_found'
+         OR err_msg LIKE '%does not exist%' THEN
+        groq_body := jsonb_build_object(
+          'model', 'qwen/qwen3.8-27b',
+          'messages', jsonb_build_array(
+            jsonb_build_object('role', 'system', 'content', system_prompt),
+            jsonb_build_object('role', 'user', 'content', left(news_text, 8000))
+          ),
+          'temperature', 0.2,
+          'response_format', jsonb_build_object('type', 'json_object')
+        )::text;
+      END IF;
       PERFORM pg_sleep(1);
       CONTINUE;
     END IF;

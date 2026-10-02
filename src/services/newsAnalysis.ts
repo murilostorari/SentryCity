@@ -36,11 +36,9 @@ export interface NewsAnalysisResult {
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-// Modelos disponíveis no Groq API. Basta trocar para alternar.
+// Modelos disponíveis no Groq API (verificados contra a conta). Basta trocar para alternar.
 export const FREE_MODELS = {
   qwen: 'qwen/qwen3.8-27b',
-  llama8b: 'llama-3.1-8b-instant',
-  llama70b: 'llama-3.3-70b-versatile',
   gptoss: 'openai/gpt-oss-20b',
 } as const;
 
@@ -50,7 +48,11 @@ const DEFAULT_MODEL = FREE_MODELS.qwen;
 
 /** Retorna o modelo configurado via variável de ambiente (AI_PRODUCT_MODEL), ou o default do Groq. */
 export function getActiveModel(): string {
-  return (process.env.AI_PRODUCT_MODEL as string | undefined)?.trim() || DEFAULT_MODEL;
+  const raw = (process.env.AI_PRODUCT_MODEL as string | undefined)?.trim().replace(/^["']|["']$/g, '');
+  if (!raw) return DEFAULT_MODEL;
+  // Só aceita modelos conhecidos — evita model_not_found no Groq
+  const known = Object.values(FREE_MODELS) as string[];
+  return known.includes(raw) ? raw : DEFAULT_MODEL;
 }
 
 const SYSTEM_PROMPT = `Você é um analista de OSINT especializado em incidentes urbanos.
@@ -245,7 +247,8 @@ export async function analyzeNewsText(
   const result = data as Record<string, unknown>;
 
   if (result.error) {
-    throw new Error(String(result.error));
+    const detail = (result.last_error as string | undefined) || (result.raw as string | undefined) || '';
+    throw new Error(detail ? `${String(result.error)} (${detail.substring(0, 200)})` : String(result.error));
   }
 
   return normalizeResult(result);
