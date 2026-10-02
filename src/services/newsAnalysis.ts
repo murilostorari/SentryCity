@@ -139,22 +139,33 @@ function normalizeResult(raw: any): NewsAnalysisResult {
   const severity = VALID_SEVERITIES.includes(raw?.severity) ? raw.severity : 'medium';
   const location_precision: LocationPrecision =
     VALID_PRECISIONS.includes(raw?.location_precision) ? raw.location_precision : 'unknown';
-  let score = Number(raw?.confidence_score);
+  let score = Number(raw?.confidence_score ?? raw?.confidence);
   if (!Number.isFinite(score)) score = 0;
   score = Math.min(1, Math.max(0, score));
 
   const loc = raw?.location && typeof raw.location === 'object' ? raw.location : {};
+  // Fallback: se a IA retornar formato flat (street/city no topo), mpra location
+  const flat = loc.street === undefined && (raw?.street || raw?.city) ? raw : {};
   const location = applyCrossStreetRule({
-    street: String(loc.street ?? '').trim(),
-    number: String(loc.number ?? '').trim(),
+    street: String(loc.street ?? flat.street ?? '').trim(),
+    number: String(loc.number ?? flat.number ?? '').trim(),
     complement: String(loc.complement ?? '').trim(),
-    neighborhood: String(loc.neighborhood ?? '').trim(),
-    city: String(loc.city ?? '').trim(),
-    state: String(loc.state ?? '').trim(),
-    zip_code: String(loc.zip_code ?? '').trim(),
-    cross_street: String(loc.cross_street ?? '').trim(),
-    reference: String(loc.reference ?? '').trim(),
+    neighborhood: String(loc.neighborhood ?? flat.neighborhood ?? '').trim(),
+    city: String(loc.city ?? flat.city ?? '').trim(),
+    state: String(loc.state ?? flat.state ?? '').trim(),
+    zip_code: String(loc.zip_code ?? flat.zip_code ?? '').trim(),
+    cross_street: String(loc.cross_street ?? flat.cross_street ?? '').trim(),
+    reference: String(loc.reference ?? flat.reference ?? '').trim(),
   });
+
+  // Fallback de precisão: se não veio, infere dos campos preenchidos
+  let precision = location_precision;
+  if (precision === 'unknown') {
+    if (location.street && location.number) precision = 'exact';
+    else if (location.street) precision = 'street';
+    else if (location.neighborhood) precision = 'neighborhood';
+    else if (location.city) precision = 'city';
+  }
 
   return {
     title: String(raw?.title ?? '').trim() || 'Incidente sem título',
@@ -163,7 +174,7 @@ function normalizeResult(raw: any): NewsAnalysisResult {
     severity: severity as NewsAnalysisResult['severity'],
     confidence_score: score,
     location,
-    location_precision,
+    location_precision: precision,
   };
 }
 
