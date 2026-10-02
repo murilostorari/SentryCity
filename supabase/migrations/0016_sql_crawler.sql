@@ -97,9 +97,15 @@ DECLARE
   original_url text;
    item_title text;
    item_description text;
+   item_source_url text;
+   item_source_name text;
    v_url_hash text;
    already_exists boolean;
    v_source_id uuid;
+   v_display_source text;
+   v_display_source_url text;
+   v_source_display text;
+   v_incident_id uuid;
   groq_api_key text;
   browser_ua text := 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
   groq_body text;
@@ -147,26 +153,26 @@ BEGIN
     SELECT id INTO v_source_id FROM public.sources WHERE name = feed_rec.name;
 
     BEGIN
-      -- For jina_search feeds, use Google News RSS search endpoint
+      -- For jina_search feeds, use Google News RSS search endpoint with 7-day recency filter
       IF feed_rec.source_type = 'jina_search' THEN
         feed_content := public.http_get_xml(
           'https://news.google.com/rss/search?q=' || replace(feed_rec.url, ' ', '+') ||
-            '&hl=pt-BR&gl=BR&ceid=BR:pt-419',
+            '+when:7d&hl=pt-BR&gl=BR&ceid=BR:pt-419',
           browser_ua
         );
       ELSE
         feed_content := public.http_get_xml(feed_rec.url, browser_ua);
       END IF;
 
-      PERFORM pg_sleep(2);
+      PERFORM pg_sleep(1);
 
       IF feed_content NOT LIKE '%<item%' THEN
         stat_errors := array_append(stat_errors, 'RSS: no items for ' || feed_rec.name);
         CONTINUE;
       END IF;
 
-      -- Extract URLs, titles, and pubDate from RSS items (single pass)
-      FOR single_url, item_title, item_pubdate, item_description IN
+      -- Extract URLs, titles, pubDate, and source from RSS items (single pass)
+      FOR single_url, item_title, item_pubdate, item_description, item_source_url, item_source_name IN
         WITH item_contents AS (
           SELECT (regexp_matches(feed_content, '<item[^>]*>\s*(.*?)\s*</item>', 'gis'))[1] as item_xml
         )
@@ -177,10 +183,12 @@ BEGIN
           left(regexp_replace(
             substring(item_xml FROM '<description[^>]*>(.*)</description>'),
             '<[^>]+>', ' ', 'g'
-          ), 1000) as description
+          ), 1000) as description,
+          substring(item_xml FROM '<source[^>]*url="([^"]*)"') as source_url,
+          substring(item_xml FROM '<source[^>]*>([^<]*)</source>') as source_name
         FROM item_contents
         WHERE item_xml ~ '<link[^>]*>https?://'
-        LIMIT 5
+        LIMIT 20
       LOOP
 
         stat_found := stat_found + 1;
@@ -218,7 +226,7 @@ BEGIN
           END;
         END IF;
 
-        IF item_date IS NOT NULL AND item_date < now() - interval '7 days' THEN
+        IF item_date IS NOT NULL AND item_date < now() - interval '30 days' THEN
           stat_errors := array_append(stat_errors, 'DateFiltered: ' || left(item_title, 60));
           CONTINUE;
         END IF;
@@ -238,13 +246,14 @@ BEGIN
           CONTINUE;
         END IF;
 
-        -- Save raw_report
+        -- Save raw_report (with extracted source name)
         INSERT INTO public.raw_reports(
           original_text, original_url, url_hash, title, source_name,
           published_at, processed
         ) VALUES (
-          item_title, original_url, v_url_hash,
-          item_title, 'SQL Crawler RSS', now(), false
+          item_description, original_url, v_url_hash,
+          item_title, COALESCE(NULLIF(item_source_name, ''), feed_rec.name),
+          COALESCE(item_date, now()), false
         )
         ON CONFLICT (url_hash) DO NOTHING;
 
@@ -425,15 +434,22 @@ BEGIN
           lng := -49.99;
         END IF;
 
-        -- Create incident (source includes feed name for attribution)
-        IF NOT EXISTS(SELECT 1 FROM public.incidents WHERE source = 
-          CASE 
-            WHEN original_url LIKE 'https://news.google.com/rss/articles/%' THEN
-              feed_rec.name || ' | ' || original_url
-            ELSE
-              substring(original_url from 'https?://(?:www\.)?([^/]+)') || ' | ' || original_url
-          END
-        ) THEN
+        -- Determine display source name: use <source> tag if available, else feed name or URL domain
+        v_display_source := COALESCE(
+          NULLIF(item_source_name, ''),
+          feed_rec.name
+        );
+
+        -- Determine display source URL: use <source> url if available, else extract from article URL
+        v_display_source_url := COALESCE(
+          NULLIF(item_source_url, ''),
+          substring(original_url from 'https?://(?:www\.)?([^/]+)')
+        );
+
+        -- Create incident (source = "SourceName | ArticleURL")
+        v_source_display := v_display_source || ' | ' || original_url;
+
+        IF NOT EXISTS(SELECT 1 FROM public.incidents WHERE source = v_source_display) THEN
            INSERT INTO public.incidents(
              title, description, type, severity, status,
              latitude, longitude, address, city, state,
@@ -449,18 +465,27 @@ BEGIN
             END,
             'active', lat, lng,
             COALESCE(ai_street, ''), ai_city, ai_state,
-             ai_confidence, 
-             CASE 
-               WHEN original_url LIKE 'https://news.google.com/rss/articles/%' THEN
-                 feed_rec.name || ' | ' || original_url
-               ELSE
-                 substring(original_url from 'https?://(?:www\.)?([^/]+)') || ' | ' || original_url
-             END,
+             ai_confidence,
+             v_source_display,
              v_source_id,
              now()
-          );
+          )
+          RETURNING id INTO v_incident_id;
+
           stat_created := stat_created + 1;
+        ELSE
+          SELECT id INTO v_incident_id FROM public.incidents WHERE source = v_source_display LIMIT 1;
         END IF;
+
+        -- Link raw_report to incident (makes incident_news view / NewsCard work)
+        UPDATE public.raw_reports SET
+          incident_id = v_incident_id,
+          processed = true,
+          title = ai_title,
+          description = ai_description,
+          source_name = v_display_source,
+          original_text = left(item_description, 2000)
+        WHERE url_hash = v_url_hash;
 
       END LOOP;
 

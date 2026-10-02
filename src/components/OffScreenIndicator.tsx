@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { X, ArrowUp, AlertTriangle, Zap, CloudRain, Construction, Music, PartyPopper, Megaphone, Star, HelpCircle } from 'lucide-react';
+import { X, ArrowUp, AlertTriangle, Zap, CloudRain, Construction, Music, PartyPopper, Megaphone, Star, HelpCircle, Flame, ShieldAlert, Droplets } from 'lucide-react';
 import { Incident } from '../types/Incident';
 
 interface OffScreenIndicatorProps {
@@ -14,14 +14,27 @@ export default function OffScreenIndicator({ incident, angle, onClose, onClick, 
   
   const getIcon = () => {
     switch(incident.type) {
-      case 'accident': return <AlertTriangle size={16} className="text-white" />;
-      case 'power': return <Zap size={16} className="text-white" />;
-      case 'weather': return <CloudRain size={16} className="text-white" />;
-      case 'pothole': return <Construction size={16} className="text-white" />;
+      case 'accident':
+      case 'traffic_accident':
+      case 'motorcycle_accident':
+        return <AlertTriangle size={16} className="text-white" />;
+      case 'power':
+      case 'power_outage':
+        return <Zap size={16} className="text-white" />;
+      case 'weather':
+      case 'flood':
+        return <Droplets size={16} className="text-white" />;
+      case 'fire':
+        return <Flame size={16} className="text-white" />;
+      case 'pothole':
+      case 'infrastructure_damage':
+      case 'road_closure':
+        return <Construction size={16} className="text-white" />;
       case 'show': return <Music size={16} className="text-white" />;
       case 'party': return <PartyPopper size={16} className="text-white" />;
       case 'noise': return <Megaphone size={16} className="text-white" />;
       case 'inauguration': return <Star size={16} className="text-white" />;
+      case 'violence': return <ShieldAlert size={16} className="text-white" />;
       default: return <HelpCircle size={16} className="text-white" />;
     }
   };

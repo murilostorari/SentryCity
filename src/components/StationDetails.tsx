@@ -130,13 +130,21 @@ export default function StationDetails({
   const translateType = (t: string) => {
     switch(t) {
       case 'accident': return 'Acidente';
+      case 'traffic_accident': return 'Acidente de Trânsito';
+      case 'motorcycle_accident': return 'Acidente de Moto';
       case 'power': return 'Energia';
+      case 'power_outage': return 'Falta de Energia';
       case 'weather': return 'Clima';
-      case 'pothole': return 'Buraco';
+      case 'flood': return 'Alagamento/Enchente';
+      case 'fire': return 'Incêndio';
+      case 'pothole': return 'Buraco na Via';
+      case 'infrastructure_damage': return 'Dano na Infraestrutura';
+      case 'road_closure': return 'Fechamento de Via';
       case 'show': return 'Show/Concerto';
       case 'party': return 'Festa/Evento';
       case 'noise': return 'Barulho/Reclamação';
       case 'inauguration': return 'Inauguração';
+      case 'violence': return 'Violência';
       case 'other': return 'Outro';
       default: return t;
     }

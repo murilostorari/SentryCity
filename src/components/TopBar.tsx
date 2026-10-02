@@ -253,19 +253,27 @@ export default function TopBar({
   const translateType = (type: string) => {
     switch(type) {
       case 'accident': return 'Acidente';
+      case 'traffic_accident': return 'Acidente de Trânsito';
+      case 'motorcycle_accident': return 'Acidente de Moto';
       case 'power': return 'Energia';
+      case 'power_outage': return 'Falta de Energia';
       case 'weather': return 'Clima';
-      case 'pothole': return 'Buraco';
+      case 'flood': return 'Alagamento/Enchente';
+      case 'fire': return 'Incêndio';
+      case 'pothole': return 'Buraco na Via';
+      case 'infrastructure_damage': return 'Dano na Infraestrutura';
+      case 'road_closure': return 'Fechamento de Via';
       case 'show': return 'Show';
       case 'party': return 'Festa';
       case 'noise': return 'Barulho';
       case 'inauguration': return 'Inauguração';
+      case 'violence': return 'Violência';
       case 'other': return 'Outro';
       default: return type;
     }
   };
 
-  const allTypes = ['accident', 'power', 'weather', 'pothole', 'show', 'party', 'noise', 'inauguration', 'other'];
+  const allTypes = ['accident', 'traffic_accident', 'motorcycle_accident', 'power', 'power_outage', 'weather', 'flood', 'fire', 'pothole', 'infrastructure_damage', 'road_closure', 'show', 'party', 'noise', 'inauguration', 'violence', 'other'];
   const allSeverities = ['critical', 'high', 'medium', 'low'];
 
   return (

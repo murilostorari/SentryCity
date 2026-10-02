@@ -1,4 +1,4 @@
-import { X, ExternalLink, Clock, AlertTriangle, Zap, Music, PartyPopper, Volume2, Ribbon, HelpCircle, Newspaper } from 'lucide-react';
+import { X, ExternalLink, Clock, AlertTriangle, Zap, Music, PartyPopper, Volume2, Ribbon, HelpCircle, Newspaper, Flame, ShieldAlert, Droplets, Construction } from 'lucide-react';
 import { Incident, IncidentNewsItem } from '../types/Incident';
 import ResponsiveModal from './ResponsiveModal';
 
@@ -14,12 +14,27 @@ export default function NewsModal({ news, incident, isOpen, onClose, isDarkMode 
   
   const getIcon = (type: string) => {
     switch (type) {
-      case 'accident': return <AlertTriangle size={24} className="text-white" />;
-      case 'power': return <Zap size={24} className="text-white" />;
+      case 'accident':
+      case 'traffic_accident':
+      case 'motorcycle_accident':
+        return <AlertTriangle size={24} className="text-white" />;
+      case 'power':
+      case 'power_outage':
+        return <Zap size={24} className="text-white" />;
+      case 'weather':
+      case 'flood':
+        return <Droplets size={24} className="text-white" />;
+      case 'fire':
+        return <Flame size={24} className="text-white" />;
+      case 'pothole':
+      case 'infrastructure_damage':
+      case 'road_closure':
+        return <Construction size={24} className="text-white" />;
       case 'show': return <Music size={24} className="text-white" />;
       case 'party': return <PartyPopper size={24} className="text-white" />;
       case 'noise': return <Volume2 size={24} className="text-white" />;
       case 'inauguration': return <Ribbon size={24} className="text-white" />;
+      case 'violence': return <ShieldAlert size={24} className="text-white" />;
       default: return <HelpCircle size={24} className="text-white" />;
     }
   };

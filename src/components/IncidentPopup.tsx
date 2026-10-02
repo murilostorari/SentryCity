@@ -1,4 +1,4 @@
-import { Zap, AlertTriangle, CloudRain, Construction, ArrowRight, X, AlertOctagon, Music, PartyPopper, Megaphone, Star, HelpCircle } from 'lucide-react';
+import { Zap, AlertTriangle, CloudRain, Construction, ArrowRight, X, AlertOctagon, Music, PartyPopper, Megaphone, Star, HelpCircle, Flame, ShieldAlert, Droplets } from 'lucide-react';
 import { Incident } from '../types/Incident';
 
 interface IncidentPopupProps {
@@ -11,14 +11,27 @@ interface IncidentPopupProps {
 export default function IncidentPopup({ incident, onOpenDetails, onClose, isDarkMode }: IncidentPopupProps) {
   const getIcon = () => {
     switch(incident.type) {
-      case 'accident': return <AlertTriangle size={18} className="text-gray-900 dark:text-white" />;
-      case 'power': return <Zap size={18} className="text-gray-900 dark:text-white" />;
-      case 'weather': return <CloudRain size={18} className="text-gray-900 dark:text-white" />;
-      case 'pothole': return <Construction size={18} className="text-gray-900 dark:text-white" />;
+      case 'accident':
+      case 'traffic_accident':
+      case 'motorcycle_accident':
+        return <AlertTriangle size={18} className="text-gray-900 dark:text-white" />;
+      case 'power':
+      case 'power_outage':
+        return <Zap size={18} className="text-gray-900 dark:text-white" />;
+      case 'weather':
+      case 'flood':
+        return <Droplets size={18} className="text-gray-900 dark:text-white" />;
+      case 'fire':
+        return <Flame size={18} className="text-gray-900 dark:text-white" />;
+      case 'pothole':
+      case 'infrastructure_damage':
+      case 'road_closure':
+        return <Construction size={18} className="text-gray-900 dark:text-white" />;
       case 'show': return <Music size={18} className="text-gray-900 dark:text-white" />;
       case 'party': return <PartyPopper size={18} className="text-gray-900 dark:text-white" />;
       case 'noise': return <Megaphone size={18} className="text-gray-900 dark:text-white" />;
       case 'inauguration': return <Star size={18} className="text-gray-900 dark:text-white" />;
+      case 'violence': return <ShieldAlert size={18} className="text-gray-900 dark:text-white" />;
       default: return <HelpCircle size={18} className="text-gray-900 dark:text-white" />;
     }
   };

@@ -1,5 +1,5 @@
--- Create ai_analyze RPC function that frontend can call via supabase.rpc('ai_analyze', {news_text: ...})
--- This reads GROQ_API_KEY from crawler_config table (no env vars needed)
+-- ai_analyze: RPC function for frontend URL ingestion
+-- Reads GROQ_API_KEY from crawler_config (no env vars needed)
 
 CREATE OR REPLACE FUNCTION public.ai_analyze(news_text text, model_name text DEFAULT 'qwen/qwen3.8-27b')
 RETURNS jsonb
@@ -12,10 +12,11 @@ DECLARE
   groq_json jsonb;
   content text;
   result jsonb;
+  err_msg text;
+  attempt int := 0;
   system_prompt text := 'Você é um analista de OSINT. Extraia info de incidentes urbanos. Responda SOMENTE JSON: {"title":"","description":"","type":"accident|power|weather|pothole|show|party|noise|inauguration|other","severity":"low|medium|high|critical","confidence":0.5,"city":"","state":"SP","street":"","neighborhood":""}. Extraia rua, bairro e cidade do texto.';
-  browser_ua text := 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  browser_ua text := 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
 BEGIN
-  -- Get API key from config table
   api_key := (SELECT key_value FROM public.crawler_config WHERE key_name = 'groq_api_key');
   IF api_key IS NULL OR length(api_key) = 0 THEN
     RETURN jsonb_build_object('error', 'Groq API key not configured');
@@ -25,7 +26,6 @@ BEGIN
     RETURN jsonb_build_object('error', 'News text too short');
   END IF;
 
-  -- Build Groq request body
   groq_body := jsonb_build_object(
     'model', model_name,
     'messages', jsonb_build_array(
@@ -36,38 +36,55 @@ BEGIN
     'response_format', jsonb_build_object('type', 'json_object')
   )::text;
 
-  -- Call Groq via http extension (same as crawler uses)
-  groq_response := public.http_post_json(
-    'https://api.groq.com/openai/v1/chat/completions',
-    groq_body,
-    api_key,
-    browser_ua
-  );
+  -- Retry up to 2 times (Groq can be flaky)
+  FOR attempt IN 1..3 LOOP
+    groq_response := public.http_post_json(
+      'https://api.groq.com/openai/v1/chat/completions',
+      groq_body, api_key, browser_ua
+    );
 
-  -- Parse response
-  groq_json := groq_response::jsonb;
-
-  -- Extract content using the known-safe pattern (same as crawler)
-  content := ((groq_json->'choices'->0->'message')#>>'{"content"}'::text[]);
-
-  IF content IS NULL OR content = '' THEN
-    RETURN jsonb_build_object('error', 'No content in Groq response', 'raw', groq_json);
-  END IF;
-
-  -- Parse JSON (handle markdown fences)
-  BEGIN
-    result := content::jsonb;
-  EXCEPTION WHEN OTHERS THEN
-    -- Try extracting JSON object
+    -- Parse response
     BEGIN
-      result := substring(content FROM '\{[\s\S]*\}')::jsonb;
+      groq_json := groq_response::jsonb;
     EXCEPTION WHEN OTHERS THEN
-      RETURN jsonb_build_object('error', 'Failed to parse AI response', 'content', content);
+      PERFORM pg_sleep(1);
+      CONTINUE;
     END;
-  END;
 
-  RETURN result;
+    -- Check if Groq returned an error
+    IF groq_json ? 'error' THEN
+      err_msg := groq_json->'error'->>'message';
+      PERFORM pg_sleep(1);
+      CONTINUE;
+    END IF;
+
+    -- Extract content
+    content := (groq_json->'choices'->0->'message'->>'content');
+
+    IF content IS NOT NULL AND length(content) > 0 THEN
+      -- Parse JSON
+      BEGIN
+        result := content::jsonb;
+      EXCEPTION WHEN OTHERS THEN
+        BEGIN
+          result := substring(content FROM '\{[\s\S]*\}')::jsonb;
+        EXCEPTION WHEN OTHERS THEN
+          RETURN jsonb_build_object('error', 'Failed to parse AI response', 'content', left(content, 500));
+        END;
+      END;
+      RETURN result;
+    END IF;
+
+    -- No content — wait and retry
+    PERFORM pg_sleep(1);
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'error', 'Groq API returned no content after 3 attempts',
+    'last_error', coalesce(err_msg, 'unknown'),
+    'raw', left(coalesce(groq_response, ''), 500)
+  );
 END;
 $func$;
 
-COMMENT ON FUNCTION public.ai_analyze(text, text) IS 'Analyze news text via Groq AI. Called by frontend via supabase.rpc().';
+COMMENT ON FUNCTION public.ai_analyze(text, text) IS 'Analyze news text via Groq AI with retry. Frontend calls via supabase.rpc().';
