@@ -44,6 +44,8 @@ export const FREE_MODELS = {
   gptoss: 'openai/gpt-oss-20b',
 } as const;
 
+import { supabase } from '../lib/supabase';
+
 const DEFAULT_MODEL = FREE_MODELS.qwen;
 
 /** Retorna o modelo configurado via variável de ambiente (AI_PRODUCT_MODEL), ou o default do Groq. */
@@ -219,7 +221,6 @@ export function buildGeocodeQueryByPrecision(
 
 /**
  * Analisa o texto de uma notícia e retorna os dados estruturados do incidente.
- *
  * @param newsText  Texto completo (ou trecho) da notícia.
  * @param model     Modelo do Groq API a usar (padrão: qwen/qwen3.8-27b).
  */
@@ -227,74 +228,25 @@ export async function analyzeNewsText(
   newsText: string,
   model: string = getActiveModel()
 ): Promise<NewsAnalysisResult> {
-  const apiKey = process.env.GROQ_API_KEY as string | undefined;
-
-  if (!apiKey) {
-    throw new Error(
-      'GROQ_API_KEY não configurada. Adicione a variável de ambiente para habilitar a análise por IA.'
-    );
-  }
   if (!newsText || newsText.trim().length < 10) {
     throw new Error('Texto da notícia muito curto para análise.');
   }
 
-  const buildBody = (useJsonMode: boolean) => ({
-    model,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: newsText },
-    ],
-    temperature: 0.2,
-    ...(useJsonMode ? { response_format: { type: 'json_object' as const } } : {}),
+  // Calls public.ai_analyze() RPC — key is stored in crawler_config, NOT in env vars
+  const { data, error } = await supabase.rpc('ai_analyze', {
+    news_text: newsText,
+    model_name: model,
   });
 
-  // Alguns modelos (ex: reasoning do NVIDIA) não suportam response_format.
-  // Tentamos primeiro com JSON mode; se a API recusar, repetimos sem ele.
-  let res = await fetch(GROQ_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(buildBody(true)),
-  });
-
-  if (!res.ok && res.status >= 400 && res.status < 500) {
-    res = await fetch(GROQ_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(buildBody(false)),
-    });
+  if (error) {
+    throw new Error(`RPC ai_analyze falhou: ${error.message || String(error)}`);
   }
 
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`Groq API respondeu ${res.status}: ${detail}`);
+  const result = data as Record<string, unknown>;
+
+  if (result.error) {
+    throw new Error(String(result.error));
   }
 
-  const data = await res.json();
-  const content: string = data?.choices?.[0]?.message?.content ?? '';
-
-  let parsed: any;
-  try {
-    // Alguns modelos envolvem o JSON em cercas de código; limpamos antes.
-    const cleaned = content.replace(/```json|```/g, '').trim();
-    parsed = JSON.parse(cleaned);
-  } catch {
-    // Modelos de raciocínio podem antepor texto/raciocínio ao JSON. Extraímos o 1º objeto.
-    const match = content.match(/\{[\s\S]*\}/);
-    if (!match) {
-      throw new Error('Não foi possível interpretar a resposta da IA como JSON.');
-    }
-    try {
-      parsed = JSON.parse(match[0].replace(/```json|```/g, ''));
-    } catch {
-      throw new Error('Não foi possível interpretar a resposta da IA como JSON.');
-    }
-  }
-
-  return normalizeResult(parsed);
+  return normalizeResult(result);
 }
