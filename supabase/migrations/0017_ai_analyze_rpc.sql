@@ -66,6 +66,20 @@ BEGIN
           'temperature', 0.2,
           'response_format', jsonb_build_object('type', 'json_object')
         )::text;
+      ELSIF coalesce(groq_json->'error'->>'code', '') = 'rate_limit_exceeded'
+         OR err_msg LIKE '%Rate limit%' THEN
+        -- Daily/request rate limit: switch to gpt-oss-20b (separate quota;
+        -- reasoning model needs higher max_tokens)
+        groq_body := jsonb_build_object(
+          'model', 'openai/gpt-oss-20b',
+          'max_tokens', 900,
+          'messages', jsonb_build_array(
+            jsonb_build_object('role', 'system', 'content', system_prompt),
+            jsonb_build_object('role', 'user', 'content', left(news_text, 8000))
+          ),
+          'temperature', 0.2,
+          'response_format', jsonb_build_object('type', 'json_object')
+        )::text;
       END IF;
       PERFORM pg_sleep(1);
       CONTINUE;

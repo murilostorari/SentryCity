@@ -1,4 +1,4 @@
-import { Zap, AlertTriangle, CloudRain, Construction, AlertOctagon, Music, PartyPopper, Megaphone, Star, HelpCircle } from 'lucide-react';
+import { Zap, AlertTriangle, Construction, AlertOctagon, Music, PartyPopper, Megaphone, Star, HelpCircle, Flame, ShieldAlert, Droplets, MinusCircle } from 'lucide-react';
 import { Colors } from '../constants/Colors';
 
 interface IncidentMarkerProps {
@@ -27,14 +27,17 @@ export default function IncidentMarker({ isSelected, type, severity, isDarkMode,
 
   // Different icons based on type
   let IconComponent = AlertOctagon;
-  if (type === 'accident') IconComponent = AlertTriangle;
-  else if (type === 'power') IconComponent = Zap;
-  else if (type === 'weather') IconComponent = CloudRain;
-  else if (type === 'pothole') IconComponent = Construction;
+  if (type === 'accident' || type === 'traffic_accident' || type === 'motorcycle_accident') IconComponent = AlertTriangle;
+  else if (type === 'power' || type === 'power_outage') IconComponent = Zap;
+  else if (type === 'weather' || type === 'flood') IconComponent = Droplets;
+  else if (type === 'fire') IconComponent = Flame;
+  else if (type === 'pothole' || type === 'infrastructure_damage') IconComponent = Construction;
+  else if (type === 'road_closure') IconComponent = MinusCircle;
   else if (type === 'show') IconComponent = Music;
   else if (type === 'party') IconComponent = PartyPopper;
   else if (type === 'noise') IconComponent = Megaphone;
   else if (type === 'inauguration') IconComponent = Star;
+  else if (type === 'violence') IconComponent = ShieldAlert;
   else if (type === 'other') IconComponent = HelpCircle;
 
   return (
