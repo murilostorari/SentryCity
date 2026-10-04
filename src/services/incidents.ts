@@ -130,9 +130,17 @@ export async function fetchIncidents(): Promise<Incident[]> {
 /** Horas de inatividade antes de auto-resolver, por tipo de incidente. */
 export const AUTO_RESOLVE_HOURS: Record<string, number> = {
   accident: 72,
+  traffic_accident: 72,
+  motorcycle_accident: 72,
   power: 72,
+  power_outage: 72,
   weather: 48,
+  flood: 48,
+  fire: 48,
   pothole: 168,
+  infrastructure_damage: 168,
+  road_closure: 48,
+  violence: 72,
   show: 168,
   party: 48,
   noise: 48,
@@ -143,9 +151,17 @@ export const AUTO_RESOLVE_HOURS: Record<string, number> = {
 /** Horas que um incidente 'resolved' fica visível no mapa depois de resolvido. */
 export const RESOLVED_VISIBILITY_HOURS: Record<string, number> = {
   accident: 48,
+  traffic_accident: 48,
+  motorcycle_accident: 48,
   power: 48,
+  power_outage: 48,
   weather: 24,
+  flood: 24,
+  fire: 48,
   pothole: 168,
+  infrastructure_damage: 168,
+  road_closure: 24,
+  violence: 48,
   show: 72,
   party: 24,
   noise: 24,
@@ -163,16 +179,22 @@ export function getResolvedVisibilityHours(type: string): number {
   return RESOLVED_VISIBILITY_HOURS[type] ?? 24;
 }
 
-/** Calcula o timestamp (ms) em que o incidente será auto-resolvido. */
-export function getAutoResolveDeadline(incident: Incident): number | null {
+/**
+ * Calcula o timestamp (ms) em que o incidente será auto-resolvido.
+ * O timer é baseado na ÚLTIMA atividade (criação ou relato mais recente) +
+ * auto_resolve_hours do tipo — espelha o comportamento de
+ * auto_resolve_inactive_incidents() no banco (atividade recente mantém ativo).
+ */
+export function getAutoResolveDeadline(incident: Incident, lastActivityMs?: number): number | null {
   const hours = getAutoResolveHours(incident.type);
-  return incident.timestamp + hours * 3600 * 1000;
+  const last = Math.max(incident.timestamp, lastActivityMs ?? 0);
+  return last + hours * 3600 * 1000;
 }
 
 /** Horas restantes antes da auto-resolução (número positivo ou 0). */
-export function getHoursUntilAutoResolve(incident: Incident): number {
+export function getHoursUntilAutoResolve(incident: Incident, lastActivityMs?: number): number {
   if (incident.status === 'resolved') return 0;
-  const deadline = getAutoResolveDeadline(incident);
+  const deadline = getAutoResolveDeadline(incident, lastActivityMs);
   if (!deadline) return 0;
   return Math.max(0, (deadline - Date.now()) / (1000 * 60 * 60));
 }
@@ -347,11 +369,20 @@ export async function mergeOrCreateIncident(
 
   if (nearby) {
     // Merge: cria relato de confirmação no incidente existente.
-    await createIncidentReport({
-      incident_id: nearby.id,
-      type: 'confirm',
-      comment: input.description ?? `Relato via ${input.source ?? 'Manual'}`,
-    });
+    // Tolerante a falhas (ex.: usuário é o criador do incidente e o banco
+    // bloqueia confirmar o próprio incidente) — o merge segue mesmo assim.
+    try {
+      await createIncidentReport(
+        {
+          incident_id: nearby.id,
+          type: 'confirm',
+          comment: input.description ?? `Relato via ${input.source ?? 'Manual'}`,
+        },
+        { allowUpsert: true },
+      );
+    } catch (err) {
+      console.warn('merge: relato de confirmação ignorado:', (err as Error)?.message);
+    }
 
     const existing = mapRowToIncident(nearby);
     return {

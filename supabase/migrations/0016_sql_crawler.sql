@@ -1016,7 +1016,7 @@ DECLARE
           v_incident_id := v_merge_id;
 
           INSERT INTO public.incident_reports (incident_id, user_id, type, comment)
-          VALUES (v_merge_id, NULL, 'confirm', 'Notícia relacionada via crawler: ' || v_display_source);
+          VALUES (v_merge_id, NULL, 'confirm', 'Via crawler: ' || v_display_source);
 
           stat_merged := stat_merged + 1;
 

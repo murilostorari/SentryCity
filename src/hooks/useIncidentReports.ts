@@ -73,11 +73,12 @@ export function useIncidentReports(incidentId: string | null) {
         id: created.id,
         type: 'user_report',
         event_type: created.type,
-        description: `${getReportTypeLabel(created.type)}${created.comment ? `: ${created.comment}` : ''}`,
+        description: getReportTypeLabel(created.type),
         created_at: created.created_at,
         report_type: created.type,
         comment: created.comment,
         user_id: created.user_id,
+        user_name: null,
       };
       setTimeline(prev => [timelineItem, ...prev]);
       // Atualizar confiança após envio

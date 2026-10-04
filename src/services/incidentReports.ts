@@ -45,6 +45,7 @@ export interface TimelineItem {
   report_type?: ReportType;
   comment?: string;
   user_id?: string | null;
+  user_name?: string | null;
 }
 
 /** Dados de frequência por hora (últimas 24h). */
@@ -112,8 +113,22 @@ export async function fetchIncidentReports(incidentId: string): Promise<Incident
   return data as IncidentReportRow[];
 }
 
-/** Cria ou atualiza um relato para um incidente (upsert na constraint unique). */
-export async function createIncidentReport(input: CreateIncidentReportInput): Promise<IncidentReportRow> {
+/** Opções de criação de relato. */
+export interface CreateIncidentReportOptions {
+  /**
+   * true  → upsert (caminhos internos: merge de incidente / ingestão de notícia).
+   * false → insert estrito: usuário comum NÃO pode repetir a mesma ação;
+   *         erro 23505 é repassado ao chamador (default).
+   */
+  allowUpsert?: boolean;
+}
+
+/** Cria um relato para um incidente. */
+export async function createIncidentReport(
+  input: CreateIncidentReportInput,
+  options: CreateIncidentReportOptions = {},
+): Promise<IncidentReportRow> {
+  const { allowUpsert = false } = options;
   // Usuário autenticado atual (se houver) para vincular o relato.
   const { data: authData } = await supabase.auth.getUser();
   const userId = authData.user?.id ?? null;
@@ -125,14 +140,21 @@ export async function createIncidentReport(input: CreateIncidentReportInput): Pr
     user_id: userId,
   };
 
-  const { data, error } = await supabase
-    .from('incident_reports')
-    .upsert(payload, {
-      onConflict: 'incident_id,user_id,type',
-      ignoreDuplicates: false,
-    })
-    .select('*')
-    .single();
+  let query;
+  if (allowUpsert) {
+    // Caminho interno (merge/ingestão): pode sobrescrever o próprio relato.
+    query = supabase
+      .from('incident_reports')
+      .upsert(payload, {
+        onConflict: 'incident_id,user_id,type',
+        ignoreDuplicates: false,
+      });
+  } else {
+    // Caminho do usuário: cada ação uma única vez por incidente.
+    query = supabase.from('incident_reports').insert(payload);
+  }
+
+  const { data, error } = await query.select('*').single();
 
   if (error) {
     console.error('createIncidentReport falhou:', error.message);
@@ -194,15 +216,26 @@ export async function fetchUnifiedTimeline(incidentId: string): Promise<Timeline
     created_at: e.created_at,
   }));
 
+  // Nomes de exibição dos usuários (RPC security definer — RLS de profiles é restrito)
+  const userIds = [...new Set((userReports || []).map(r => r.user_id).filter((id): id is string => !!id))];
+  let nameMap: Record<string, string | null> = {};
+  if (userIds.length > 0) {
+    const { data: names } = await supabase.rpc('get_profile_names', { p_ids: userIds });
+    (names as { user_id: string; name: string | null }[] | null)?.forEach(row => {
+      nameMap[row.user_id] = row.name;
+    });
+  }
+
   const userItems: TimelineItem[] = (userReports || []).map(r => ({
     id: r.id,
     type: 'user_report' as const,
     event_type: r.type,
-    description: getReportTypeLabel(r.type) + (r.comment ? `: ${r.comment}` : ''),
+    description: getReportTypeLabel(r.type),
     created_at: r.created_at,
     report_type: r.type,
     comment: r.comment,
     user_id: r.user_id,
+    user_name: r.user_id ? (nameMap[r.user_id] ?? null) : null,
   }));
 
   const allItems = [...systemItems, ...userItems].sort(

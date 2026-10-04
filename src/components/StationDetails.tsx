@@ -1,24 +1,33 @@
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { X, Copy, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, MapPin, Shield, Activity, Users, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, Edit3, User as UserIcon, RefreshCw } from 'lucide-react';
-import { BarChart, Bar, ResponsiveContainer, AreaChart, Area, CartesianGrid, YAxis } from 'recharts';
+import { X, Info, Clock, MapPin, Shield, Activity, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, RefreshCw, Bot } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts';
 import { Incident, ReportCounts, TimelineItem, ReportType, HourlyFrequencyData, ConfidenceDetails } from '../types/Incident';
 import { useIncidentReports, getReportTypeLabel as getReportTypeLabelFn, getReportTypeStyle as getReportTypeStyleFn, formatRelativeTime as formatRelativeTimeFn } from '../hooks/useIncidentReports';
-import { getHoursUntilAutoResolve, getAutoResolveDeadline, bumpIncidentActivity } from '../services/incidents';
-import { motion, AnimatePresence } from 'motion/react';
+import { getHoursUntilAutoResolve, getAutoResolveDeadline, getAutoResolveHours, bumpIncidentActivity } from '../services/incidents';
+import ResponsiveModal from './ResponsiveModal';
 import { User } from '@supabase/supabase-js';
 import { Profile } from '../types/Profile';
-
-const severityData = Array.from({ length: 24 }).map((_, i) => ({
-  time: `${i}:00`,
-  value: 30 + Math.random() * 40 + (i > 15 ? 20 : 0)
-}));
 
 const reportActions: { type: ReportType; label: string; icon: ReactNode; description: string }[] = [
   { type: 'confirm', label: 'Confirmar ocorrência', icon: <CheckCircle2 size={16} />, description: 'Confirmo que este incidente está ocorrendo' },
   { type: 'resolved', label: 'Informar resolução', icon: <ShieldCheck size={16} />, description: 'O incidente foi resolvido/normalizado' },
   { type: 'deny', label: 'Negar ocorrência', icon: <XCircle size={16} />, description: 'Este incidente não está ocorrendo/é falso' },
 ];
+
+const REPORT_TYPE_COLORS: Record<string, string> = {
+  confirm: '#10B981',
+  deny: '#EF4444',
+  resolved: '#3B82F6',
+  update: '#F59E0B',
+};
+
+const REPORT_TYPE_LABELS: Record<string, string> = {
+  confirm: 'Confirmam',
+  deny: 'Negam',
+  resolved: 'Resolvem',
+  update: 'Atualizam',
+};
 
 function ChartContainer({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -56,10 +65,31 @@ export default function StationDetails({
 }) {
   const [activeTab, setActiveTab] = useState('Detalhes');
   const [reportModal, setReportModal] = useState<{ type: ReportType | null; comment: string }>({ type: null, comment: '' });
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  // Mantido após o fechamento para o conteúdo não sumir durante a animação de saída.
+  const [lastReportType, setLastReportType] = useState<ReportType | null>(null);
   const [isBumping, setIsBumping] = useState(false);
   const [bumpError, setBumpError] = useState<string | null>(null);
   const [bumpSuccess, setBumpSuccess] = useState(false);
   const [countdown, setCountdown] = useState<{ label: string; ms: number } | null>(null);
+
+  const { 
+    counts, 
+    timeline, 
+    hourlyFrequency,
+    confidence,
+    reports,
+    isLoading, 
+    isSubmitting, 
+    submitReport, 
+    refresh, 
+    refreshConfidence
+  } = useIncidentReports(incident.id);
+
+  // Última atividade = criação ou relato mais recente (espelha o auto-resolve do banco)
+  const lastActivityMs = reports.length
+    ? Math.max(incident.timestamp, ...reports.map(r => new Date(r.created_at).getTime()))
+    : incident.timestamp;
 
   useEffect(() => {
     const updateCountdown = () => {
@@ -73,9 +103,8 @@ export default function StationDetails({
         return;
       }
       if (incident.status === 'active' || incident.status === 'pending') {
-        const hours = getHoursUntilAutoResolve(incident);
-        if (hours > 0) {
-          const ms = getAutoResolveDeadline(incident)! - Date.now();
+        const ms = (getAutoResolveDeadline(incident, lastActivityMs) ?? 0) - Date.now();
+        if (ms > 0 && getHoursUntilAutoResolve(incident, lastActivityMs) > 0) {
           setCountdown({ label: 'Auto-resolve em', ms });
         } else {
           setCountdown(null);
@@ -85,7 +114,7 @@ export default function StationDetails({
     updateCountdown();
     const interval = setInterval(updateCountdown, 30000);
     return () => clearInterval(interval);
-  }, [incident.id, incident.status, incident.timestamp, incident.expiresAt]);
+  }, [incident.id, incident.status, incident.timestamp, incident.expiresAt, lastActivityMs]);
 
   const formatCountdown = (ms: number): string => {
     if (ms <= 0) return '0h 0m';
@@ -94,18 +123,6 @@ export default function StationDetails({
     const m = totalMin % 60;
     return `${h}h ${m}m`;
   };
-  
-  const { 
-    counts, 
-    timeline, 
-    hourlyFrequency,
-    confidence,
-    isLoading, 
-    isSubmitting, 
-    submitReport, 
-    refresh,
-    refreshConfidence
-  } = useIncidentReports(incident.id);
 
   const translateSeverity = (sev: string) => {
     switch(sev) {
@@ -160,16 +177,6 @@ export default function StationDetails({
     }
   };
 
-  const getSeverityHex = (sev: string) => {
-    switch(sev) {
-      case 'critical': return '#EF4444';
-      case 'high': return '#F97316';
-      case 'medium': return '#F59E0B';
-      case 'low': return '#10B981';
-      default: return '#6B7280';
-    }
-  };
-
   const getSeverityTextColor = (sev: string) => {
     switch(sev) {
       case 'critical': return 'text-red-600 dark:text-[#EF4444]';
@@ -201,17 +208,23 @@ export default function StationDetails({
       // Criador não pode confirmar nem negar o próprio incidente
       return;
     }
+    // Cada ação é única por usuário por incidente (bloqueio extra no banco)
+    if (reports.some(r => r.user_id === user?.id && r.type === type)) {
+      return;
+    }
     setReportModal({ type, comment: '' });
+    setLastReportType(type);
+    setReportModalOpen(true);
   };
 
   const closeReportModal = () => {
-    setReportModal({ type: null, comment: '' });
+    setReportModalOpen(false);
   };
 
   const handleReportSubmit = async () => {
     if (!reportModal.type) return;
-    await submitReport(reportModal.type, reportModal.comment || undefined);
-    closeReportModal();
+    const created = await submitReport(reportModal.type, reportModal.comment || undefined);
+    if (created) closeReportModal();
   };
 
   const handleBumpActivity = async () => {
@@ -252,36 +265,6 @@ export default function StationDetails({
               <span className="truncate">{incident.address || `${incident.lat.toFixed(4)}, ${incident.lng.toFixed(4)}`}</span>
             </div>
 
-            {/* Lifecycle: countdown + confirmar ativo */}
-            {(incident.status === 'active' || incident.status === 'pending') && countdown && countdown.ms > 0 && (
-              <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                  <Clock size={12} />
-                  <span>{countdown.label}: {formatCountdown(countdown.ms)}</span>
-                </div>
-                <button
-                  onClick={handleBumpActivity}
-                  disabled={isBumping}
-                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium flex items-center gap-1 transition-colors"
-                  title="Confirmar que o incidente ainda está ativo"
-                >
-                  {isBumping ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                  Confirmar ativo
-                </button>
-              </div>
-            )}
-
-            {bumpSuccess && (
-              <div className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1.5">
-                <CheckCircle size={12} />
-                Atividade confirmada! Timer reiniciado.
-              </div>
-            )}
-
-            {bumpError && (
-              <div className="mt-1 text-xs text-red-500">{bumpError}</div>
-            )}
-
             {incident.status === 'resolved' && countdown && countdown.ms > 0 && (
               <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-[#888888]">
                 <Clock size={12} />
@@ -304,9 +287,6 @@ export default function StationDetails({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-5 no-scrollbar">
-        {/* Confidence Display - abaixo das abas */}
-        <ConfidenceDisplay confidence={confidence} onRefresh={refreshConfidence} />
-
         {activeTab === 'Detalhes' && <DetailsTab 
           incident={incident} 
           translateSeverity={translateSeverity} 
@@ -314,87 +294,88 @@ export default function StationDetails({
           translateStatus={translateStatus}
           getSeverityTextColor={getSeverityTextColor}
           getSeverityDotColor={getSeverityDotColor}
-          getSeverityHex={getSeverityHex}
-          onReportClick={openReportModal}
           hourlyFrequency={hourlyFrequency}
-          isCreator={isCreator}
         />}
         {activeTab === 'Linha do Tempo' && <TimelineTab 
           timeline={timeline} 
           counts={counts}
-          severityHex={getSeverityHex(incident.severity)}
           isLoading={isLoading} 
           onRefresh={refresh}
+          currentUserId={user?.id ?? null}
+          currentUserName={profile?.name ?? null}
         />}
-        {activeTab === 'Recursos' && <ResourcesTab />}
+        {activeTab === 'Recursos' && <ResourcesTab
+          incident={incident}
+          confidence={confidence}
+          onRefreshConfidence={refreshConfidence}
+          onReportClick={openReportModal}
+          isCreator={isCreator}
+          reports={reports}
+          currentUserId={user?.id ?? null}
+          countdown={countdown}
+          onBump={handleBumpActivity}
+          isBumping={isBumping}
+          bumpSuccess={bumpSuccess}
+          bumpError={bumpError}
+          formatCountdown={formatCountdown}
+          lastActivityMs={lastActivityMs}
+        />}
       </div>
 
-      {/* Report Modal */}
-      <AnimatePresence>
-        {reportModal.type && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-            onClick={closeReportModal}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl w-full max-w-md p-6"
-              onClick={(e) => e.stopPropagation()}
+      {/* Report Modal (bottom sheet no mobile/tablet via portal) */}
+      <ResponsiveModal
+        isOpen={reportModalOpen}
+        onClose={closeReportModal}
+        className="max-w-md"
+      >
+        <div className="overflow-y-auto p-6 no-scrollbar">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {reportActions.find(a => a.type === lastReportType)?.label}
+            </h3>
+            <button 
+              onClick={closeReportModal}
+              className="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center text-gray-500 dark:text-[#888888] hover:text-black dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#333333] transition-colors"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {reportActions.find(a => a.type === reportModal.type)?.label}
-                </h3>
-                <button 
-                  onClick={closeReportModal}
-                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center text-gray-500 dark:text-[#888888] hover:text-black dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#333333] transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
+              <X size={16} />
+            </button>
+          </div>
 
-              <p className="text-sm text-gray-500 dark:text-[#888888] mb-4">
-                {reportActions.find(a => a.type === reportModal.type)?.description}
-              </p>
+          <p className="text-sm text-gray-500 dark:text-[#888888] mb-4">
+            {reportActions.find(a => a.type === lastReportType)?.description}
+          </p>
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Comentário (opcional)
-                </label>
-                <textarea
-                  value={reportModal.comment}
-                  onChange={(e) => setReportModal(prev => ({ ...prev, comment: e.target.value }))}
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-[#2C2C2C] border-gray-300 dark:border-[#444] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900 dark:text-white transition-colors"
-                  placeholder="Adicione detalhes adicionais..."
-                />
-              </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Comentário (opcional)
+            </label>
+            <textarea
+              value={reportModal.comment}
+              onChange={(e) => setReportModal(prev => ({ ...prev, comment: e.target.value }))}
+              rows={3}
+              className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-[#2C2C2C] border-gray-300 dark:border-[#444] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900 dark:text-white transition-colors"
+              placeholder="Adicione detalhes adicionais..."
+            />
+          </div>
 
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={closeReportModal}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-[#2A2A2A] text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#333] transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleReportSubmit}
-                  disabled={isSubmitting}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                >
-                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <MessageSquare size={16} />}
-                  {isSubmitting ? 'Enviando...' : 'Enviar Relato'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={closeReportModal}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-[#2A2A2A] text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#333] transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleReportSubmit}
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+            >
+              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <MessageSquare size={16} />}
+              {isSubmitting ? 'Enviando...' : 'Enviar Relato'}
+            </button>
+          </div>
+        </div>
+      </ResponsiveModal>
     </div>
   );
 }
@@ -456,6 +437,41 @@ function Tab({ label, active, badge, onClick }: any) {
   );
 }
 
+/** Agrupa as 24 horas em 8 buckets de 3h (mais antigo → agora). */
+function buildFreqBuckets(hourlyFrequency: HourlyFrequencyData[]) {
+  const buckets = Array.from({ length: 8 }, (_, b) => ({
+    label: `${hourlyFrequency[b * 3]?.hour ?? 0}h`,
+    count: 0,
+    confirm: 0,
+    deny: 0,
+    resolved: 0,
+    update: 0,
+  }));
+  hourlyFrequency.forEach((h, i) => {
+    const b = Math.floor(i / 3);
+    if (b >= 8) return;
+    buckets[b].count += h.count;
+    buckets[b].confirm += h.confirm;
+    buckets[b].deny += h.deny;
+    buckets[b].resolved += h.resolved;
+    buckets[b].update += h.update;
+  });
+  return buckets;
+}
+
+function ChartLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-gray-500 dark:text-[#888888]">
+      {(['confirm', 'deny', 'resolved', 'update'] as const).map(key => (
+        <span key={key} className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: REPORT_TYPE_COLORS[key] }} />
+          {REPORT_TYPE_LABELS[key]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function DetailsTab({ 
   incident, 
   translateSeverity, 
@@ -463,10 +479,7 @@ function DetailsTab({
   translateStatus,
   getSeverityTextColor,
   getSeverityDotColor,
-  getSeverityHex,
-  onReportClick, 
-  hourlyFrequency,
-  isCreator
+  hourlyFrequency
 }: { 
   incident: Incident, 
   translateSeverity: (s: string) => string, 
@@ -474,37 +487,41 @@ function DetailsTab({
   translateStatus: (s: string) => string,
   getSeverityTextColor: (s: string) => string,
   getSeverityDotColor: (s: string) => string,
-  getSeverityHex: (s: string) => string,
-  onReportClick: (type: ReportType) => void, 
-  hourlyFrequency: HourlyFrequencyData[],
-  isCreator: boolean
+  hourlyFrequency: HourlyFrequencyData[]
 }) {
+  const freqBuckets = buildFreqBuckets(hourlyFrequency);
+
   return (
     <div className="space-y-6">
-      <div className="bg-red-50 dark:bg-[#3A1D1D] border border-red-200 dark:border-[#4A2525] rounded-lg p-3 flex items-start gap-3 text-red-700 dark:text-[#E54D4D] text-sm">
-        <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-        <div>
-          <span className="font-bold block mb-0.5">{incident.title}</span>
-          <span className="opacity-90">{incident.description}</span>
-        </div>
+      <div className="text-sm">
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{incident.title}</h3>
+        <p className="text-gray-600 dark:text-[#AAAAAA] leading-relaxed">{incident.description}</p>
       </div>
 
       <div>
-        <div className="flex items-center gap-1.5 mb-4">
+        <div className="flex items-center gap-1.5 mb-3">
           <h3 className="text-sm font-medium text-gray-900 dark:text-white">Frequência de Relatos (últimas 24h)</h3>
           <Info size={14} className="text-gray-400 dark:text-[#666666]" />
         </div>
-        <div className="h-[140px] w-full relative">
+        <div className="h-[160px] w-full">
           <ChartContainer>
-            <BarChart data={hourlyFrequency} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <Bar dataKey="count" fill={getSeverityHex(incident.severity)} radius={[2, 2, 0, 0]} />
+            <BarChart data={freqBuckets} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+              <XAxis dataKey="label" tick={{ fill: '#9CA3AF', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} />
+              <YAxis allowDecimals={false} tick={{ fill: '#9CA3AF', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+              <Tooltip
+                cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                formatter={(value: number, name: string) => [value, REPORT_TYPE_LABELS[name] ?? name]}
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+              />
+              <Bar dataKey="confirm" stackId="a" fill={REPORT_TYPE_COLORS.confirm} />
+              <Bar dataKey="deny" stackId="a" fill={REPORT_TYPE_COLORS.deny} />
+              <Bar dataKey="resolved" stackId="a" fill={REPORT_TYPE_COLORS.resolved} />
+              <Bar dataKey="update" stackId="a" fill={REPORT_TYPE_COLORS.update} radius={[2, 2, 0, 0]} />
             </BarChart>
           </ChartContainer>
-          <div className="flex justify-between text-xs text-gray-400 dark:text-[#666666] mt-2">
-            <span>{hourlyFrequency[0]?.label || '-24h'}</span>
-            <span>{hourlyFrequency[23]?.label || 'Agora'}</span>
-          </div>
         </div>
+        <ChartLegend />
       </div>
 
       <div>
@@ -517,29 +534,9 @@ function DetailsTab({
             return extraCount > 0 ? `${primary} +${extraCount}` : primary;
           })()} />
           <DetailRow label="Status" value={<span className={`${getSeverityTextColor(incident.severity)} flex items-center gap-1.5`}><div className={`w-1.5 h-1.5 rounded-full ${getSeverityDotColor(incident.severity)} animate-pulse`}></div>{translateStatus(incident.status)}</span>} />
-          <DetailRow label="ID" value={<div className="flex items-center justify-between w-full"><span>{incident.id}</span><Copy size={14} className="text-gray-400 dark:text-[#666666] cursor-pointer hover:text-black dark:hover:text-white transition-colors" /></div>} hasInfo />
           <DetailRow label="Severidade" value={translateSeverity(incident.severity)} />
           <DetailRow label="Reportado" value={<span className="flex items-center gap-1.5"><Clock size={14} /> {incident.time}</span>} hasInfo />
           <DetailRow label="Impacto" value={`${incident.radius}m de raio`} />
-        </div>
-      </div>
-
-      {/* Report Actions */}
-      <div className="pt-4 border-t border-gray-200 dark:border-[#2C2C2C]">
-        <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-3 uppercase">Ações</h3>
-        <div className="flex flex-wrap gap-2">
-          {reportActions
-            .filter((action) => !(isCreator && (action.type === 'confirm' || action.type === 'deny')))
-            .map((action) => (
-              <button
-                key={action.type}
-                onClick={() => onReportClick(action.type)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-[#333] bg-white dark:bg-[#262626] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2C2C2C] transition-colors text-sm"
-              >
-                <span className="w-5 h-5 flex items-center justify-center">{action.icon}</span>
-                <span>{action.label}</span>
-              </button>
-            ))}
         </div>
       </div>
     </div>
@@ -558,7 +555,36 @@ function DetailRow({ label, value, hasInfo }: any) {
   );
 }
 
-function TimelineTab({ timeline, counts, severityHex, isLoading, onRefresh }: { timeline: TimelineItem[]; counts: ReportCounts; severityHex: string; isLoading: boolean; onRefresh: () => void }) {
+/** Série acumulada (confirmações × negações) a partir dos relatos reais da timeline. */
+function buildConfirmTrend(timeline: TimelineItem[]) {
+  const asc = timeline
+    .filter(t => t.type === 'user_report' && (t.report_type === 'confirm' || t.report_type === 'deny'))
+    .slice()
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  let confirm = 0;
+  let deny = 0;
+  return asc.map(t => {
+    if (t.report_type === 'confirm') confirm++;
+    else deny++;
+    return {
+      time: new Date(t.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      confirm,
+      deny,
+    };
+  });
+}
+
+function TimelineTab({ timeline, counts, isLoading, onRefresh, currentUserId, currentUserName }: {
+  timeline: TimelineItem[];
+  counts: ReportCounts;
+  isLoading: boolean;
+  onRefresh: () => void;
+  currentUserId: string | null;
+  currentUserName: string | null;
+}) {
+  const trend = buildConfirmTrend(timeline);
+
   return (
     <div className="space-y-6">
       <div>
@@ -572,24 +598,34 @@ function TimelineTab({ timeline, counts, severityHex, isLoading, onRefresh }: { 
       </div>
 
       <div>
-        <div className="flex items-center gap-1.5 mb-4">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Tendência de Severidade</h3>
+        <div className="flex items-center gap-1.5 mb-3">
+          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Tendência de Confirmações</h3>
           <Info size={14} className="text-gray-400 dark:text-[#666666]" />
         </div>
-        <div className="h-[140px] w-full relative">
-          <ChartContainer>
-            <AreaChart data={severityData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorSeverity" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={severityHex} stopOpacity={0.2}/>
-                  <stop offset="95%" stopColor={severityHex} stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" className="dark:stroke-[#2C2C2C]" />
-              <YAxis orientation="right" tick={{ fill: '#9CA3AF', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Area type="monotone" dataKey="value" stroke={severityHex} strokeWidth={2} fillOpacity={1} fill="url(#colorSeverity)" />
-            </AreaChart>
-          </ChartContainer>
+        {trend.length < 2 ? (
+          <div className="h-[140px] flex items-center justify-center text-xs text-gray-400 dark:text-[#666666] border border-dashed border-gray-200 dark:border-[#2C2C2C] rounded-lg">
+            Dados insuficientes — pelo menos 2 relatos da comunidade são necessários.
+          </div>
+        ) : (
+          <div className="h-[160px] w-full">
+            <ChartContainer>
+              <LineChart data={trend} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                <XAxis dataKey="time" tick={{ fill: '#9CA3AF', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={24} />
+                <YAxis allowDecimals={false} tick={{ fill: '#9CA3AF', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+                <Tooltip
+                  formatter={(value: number, name: string) => [value, name === 'confirm' ? 'Confirmam (acum.)' : 'Negam (acum.)']}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                />
+                <Line type="monotone" dataKey="confirm" stroke={REPORT_TYPE_COLORS.confirm} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="deny" stroke={REPORT_TYPE_COLORS.deny} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ChartContainer>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-gray-500 dark:text-[#888888]">
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: REPORT_TYPE_COLORS.confirm }} />Confirmam (acum.)</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: REPORT_TYPE_COLORS.deny }} />Negam (acum.)</span>
         </div>
       </div>
 
@@ -621,7 +657,12 @@ function TimelineTab({ timeline, counts, severityHex, isLoading, onRefresh }: { 
         ) : (
           <div className="space-y-2">
             {timeline.map((item) => (
-              <UnifiedTimelineItem key={item.id} item={item} />
+              <UnifiedTimelineItem
+                key={item.id}
+                item={item}
+                currentUserId={currentUserId}
+                currentUserName={currentUserName}
+              />
             ))}
           </div>
         )}
@@ -630,14 +671,33 @@ function TimelineTab({ timeline, counts, severityHex, isLoading, onRefresh }: { 
   );
 }
 
-function UnifiedTimelineItem({ item, key }: { item: TimelineItem; key?: string }) {
+const CRAWLER_COMMENT_RE = /^(?:Notícia relacionada via crawler|Via crawler):\s*(.*)$/i;
+
+function UnifiedTimelineItem({ item, key, currentUserId, currentUserName }: {
+  item: TimelineItem;
+  key?: string;
+  currentUserId: string | null;
+  currentUserName: string | null;
+}) {
   const isUserReport = item.type === 'user_report';
   const style = isUserReport && item.report_type ? getReportTypeStyleFn(item.report_type) : { bg: 'bg-gray-100 dark:bg-[#2A2A2A]', text: 'text-gray-700 dark:text-gray-300', icon: '•' };
   const timeAgo = formatRelativeTimeFn(new Date(item.created_at).getTime());
-  
-  const sourceLabel = isUserReport 
-    ? (item.user_id ? `Usuário ${item.user_id.slice(0, 8)}...` : 'Comunidade')
-    : 'Sistema';
+
+  const crawlerMatch = isUserReport && item.comment ? item.comment.match(CRAWLER_COMMENT_RE) : null;
+  const isCrawler = isUserReport && !item.user_id && !!item.comment && /crawler/i.test(item.comment);
+
+  let sourceLabel = 'Sistema';
+  if (isUserReport) {
+    if (isCrawler) sourceLabel = 'Crawler/IA';
+    else if (item.user_id) {
+      const name = item.user_name
+        ?? (item.user_id === currentUserId ? currentUserName : null)
+        ?? null;
+      sourceLabel = name || 'Usuário';
+    }
+  }
+
+  const strippedComment = crawlerMatch ? crawlerMatch[1] : (item.comment || null);
 
   return (
     <div className={`bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2C2C2C] rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-[#262626] transition-colors`}>
@@ -649,13 +709,21 @@ function UnifiedTimelineItem({ item, key }: { item: TimelineItem; key?: string }
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <span className={`text-xs font-bold ${style.text}`}>{isUserReport && item.report_type ? getReportTypeLabelFn(item.report_type) : item.event_type}</span>
-              <span className="text-[10px] text-gray-400 dark:text-[#666666] whitespace-nowrap">{sourceLabel}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap ${isCrawler ? 'bg-blue-50 dark:bg-[#172554] text-blue-600 dark:text-[#3B82F6]' : 'text-gray-400 dark:text-[#666666]'}`}>
+                {isCrawler && <Bot size={10} />}
+                {sourceLabel}
+              </span>
             </div>
             <span className="text-[10px] text-gray-400 dark:text-[#666666] whitespace-nowrap">{timeAgo}</span>
           </div>
-          <p className="text-sm text-gray-600 dark:text-[#CCCCCC] mt-1">{item.description}</p>
-          {item.comment && isUserReport && (
-            <p className="text-sm text-gray-500 dark:text-[#888888] mt-1 italic">"{item.comment}"</p>
+          {isUserReport ? (
+            isCrawler && strippedComment ? (
+              <p className="text-sm text-gray-600 dark:text-[#CCCCCC] mt-1">Fonte: {strippedComment}</p>
+            ) : strippedComment ? (
+              <p className="text-sm text-gray-500 dark:text-[#888888] mt-1 italic">"{strippedComment}"</p>
+            ) : null
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-[#CCCCCC] mt-1">{item.description}</p>
           )}
         </div>
       </div>
@@ -663,13 +731,141 @@ function UnifiedTimelineItem({ item, key }: { item: TimelineItem; key?: string }
   );
 }
 
-function ResourcesTab() {
+function ResourcesTab({
+  incident,
+  confidence,
+  onRefreshConfidence,
+  onReportClick,
+  isCreator,
+  reports,
+  currentUserId,
+  countdown,
+  onBump,
+  isBumping,
+  bumpSuccess,
+  bumpError,
+  formatCountdown,
+  lastActivityMs,
+}: {
+  incident: Incident;
+  confidence: ConfidenceDetails | null;
+  onRefreshConfidence: () => void;
+  onReportClick: (type: ReportType) => void;
+  isCreator: boolean;
+  reports: { type: ReportType; user_id: string | null }[];
+  currentUserId: string | null;
+  countdown: { label: string; ms: number } | null;
+  onBump: () => void;
+  isBumping: boolean;
+  bumpSuccess: boolean;
+  bumpError: string | null;
+  formatCountdown: (ms: number) => string;
+  lastActivityMs: number;
+}) {
+  const isActive = incident.status === 'active' || incident.status === 'pending';
+  const autoResolveHours = getAutoResolveHours(incident.type);
+  const lastActivity = new Date(lastActivityMs).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+  // Ações que este usuário já usou neste incidente (uma única vez por ação)
+  const myReportTypes = new Set(
+    reports.filter(r => r.user_id && r.user_id === currentUserId).map(r => r.type),
+  );
+
   return (
     <div className="space-y-6">
-      <div className="text-center py-12 text-gray-500 dark:text-[#888888]">
-        <Shield size={48} className="mx-auto mb-4 opacity-50" />
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Recursos</h3>
-        <p className="text-sm">Em breve: recursos de emergência, contatos úteis, rotas de evacuação.</p>
+      <ConfidenceDisplay confidence={confidence} onRefresh={onRefreshConfidence} />
+
+      {/* Report Actions */}
+      <div>
+        <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider mb-3 uppercase">Ações</h3>
+        <div className="flex flex-wrap gap-2">
+          {reportActions
+            .filter((action) => !(isCreator && (action.type === 'confirm' || action.type === 'deny')))
+            .map((action) => {
+              const alreadySent = myReportTypes.has(action.type);
+              return (
+                <button
+                  key={action.type}
+                  onClick={() => onReportClick(action.type)}
+                  disabled={alreadySent}
+                  title={alreadySent ? 'Você já enviou esta ação para este incidente' : action.description}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-[#333] text-sm transition-colors ${
+                    alreadySent
+                      ? 'bg-gray-50 dark:bg-[#1E1E1E] text-gray-400 dark:text-[#666666] cursor-not-allowed'
+                      : 'bg-white dark:bg-[#262626] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2C2C2C]'
+                  }`}
+                >
+                  <span className="w-5 h-5 flex items-center justify-center">
+                    {alreadySent ? <CheckCircle2 size={16} /> : action.icon}
+                  </span>
+                  <span>{alreadySent ? 'Enviado' : action.label}</span>
+                </button>
+              );
+            })}
+        </div>
+      </div>
+
+      {/* Lifecycle: countdown + confirmar ativo */}
+      {isActive && (
+        <div className="border-t border-gray-200 dark:border-[#2C2C2C] pt-4 space-y-3">
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-[#666666] tracking-wider uppercase">Ciclo de Vida</h3>
+          {countdown && countdown.ms > 0 ? (
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                <Clock size={14} />
+                <span>{countdown.label}: <strong>{formatCountdown(countdown.ms)}</strong></span>
+              </div>
+              {!isCreator && (
+                <button
+                  onClick={onBump}
+                  disabled={isBumping}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium flex items-center gap-1.5 transition-colors text-sm"
+                  title="Confirmar que o incidente ainda está ativo"
+                >
+                  {isBumping ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Confirmar ativo
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500 dark:text-[#888888] flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5"><CheckCircle size={14} className="text-green-500" /> Sem auto-resolve pendente</span>
+              {!isCreator && (
+                <button
+                  onClick={onBump}
+                  disabled={isBumping}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium flex items-center gap-1.5 transition-colors text-sm"
+                >
+                  {isBumping ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Confirmar ativo
+                </button>
+              )}
+            </div>
+          )}
+          <p className="text-xs text-gray-500 dark:text-[#888888] leading-relaxed">
+            Resolve automaticamente após <strong>{autoResolveHours}h</strong> sem atividade
+            (última atividade: {lastActivity}). Qualquer relato — inclusive confirmações do crawler — reinicia o timer.
+          </p>
+          {isCreator && (
+            <p className="text-xs text-gray-400 dark:text-[#666666] leading-relaxed">
+              Como criador, você pode apenas informar a resolução — confirmar/negar é exclusivo de outros membros da comunidade.
+            </p>
+          )}
+          {bumpSuccess && (
+            <div className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1.5">
+              <CheckCircle size={12} />
+              Atividade confirmada! Timer reiniciado.
+            </div>
+          )}
+          {bumpError && <div className="text-xs text-red-500">{bumpError}</div>}
+        </div>
+      )}
+
+      <div className="text-center py-8 text-gray-500 dark:text-[#888888] border-t border-gray-200 dark:border-[#2C2C2C] pt-6">
+        <Shield size={40} className="mx-auto mb-3 opacity-50" />
+        <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-1">Mais recursos em breve</h3>
+        <p className="text-xs">Recursos de emergência, contatos úteis, rotas de evacuação.</p>
       </div>
     </div>
   );

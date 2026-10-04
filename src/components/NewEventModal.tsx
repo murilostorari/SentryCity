@@ -3,6 +3,7 @@ import { X, Save, ChevronDown, Check, MapPin, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ResponsiveModal from './ResponsiveModal';
 import ModalTabs from './ModalTabs';
+import Portal from './Portal';
 import { searchAddressSuggestions, geocodeAddress, fetchByCep } from '../services/geocoding';
 
 interface NewEventModalProps {
@@ -384,6 +385,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
 
                 <AnimatePresence>
                   {activeDropdown === 'type' && dropdownPosition && (
+                    <Portal key="type-dd">
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -407,6 +409,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                         </button>
                       ))}
                     </motion.div>
+                  </Portal>
                   )}
                 </AnimatePresence>
               </div>
@@ -425,6 +428,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
 
                 <AnimatePresence>
                   {activeDropdown === 'severity' && dropdownPosition && (
+                    <Portal key="severity-dd">
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -448,6 +452,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                         </button>
                       ))}
                     </motion.div>
+                  </Portal>
                   )}
                 </AnimatePresence>
               </div>
@@ -496,6 +501,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                 />
                 <AnimatePresence>
                   {showStreetSuggestions && streetSuggestions.length > 0 && dropdownPosition && (
+                    <Portal key="street-dd">
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -515,6 +521,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                         </button>
                       ))}
                     </motion.div>
+                  </Portal>
                   )}
                 </AnimatePresence>
               </div>
@@ -575,6 +582,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                 />
                 <AnimatePresence>
                   {showCitySuggestions && citySuggestions.length > 0 && dropdownPosition && (
+                    <Portal key="city-dd">
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -594,6 +602,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
                         </button>
                       ))}
                     </motion.div>
+                  </Portal>
                   )}
                 </AnimatePresence>
               </div>

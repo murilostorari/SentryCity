@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Bell, ArrowUpRight, Clock, AlertTriangle, Zap, CloudRain, Construction, Music, PartyPopper, Megaphone, Star, HelpCircle, Flame, ShieldAlert, Droplets } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Bell, ArrowUpRight, Clock, AlertTriangle, Zap, CloudRain, Construction, Music, PartyPopper, Megaphone, Star, HelpCircle, Flame, ShieldAlert, Droplets, Search, SlidersHorizontal } from 'lucide-react';
 import { Incident } from '../types/Incident';
 import ResponsiveModal from './ResponsiveModal';
 
@@ -11,13 +11,35 @@ interface RecentAlertsModalProps {
   onSelectIncident: (incident: Incident) => void;
 }
 
+const TIME_FILTERS = [
+  { hours: 12, label: '12h' },
+  { hours: 24, label: '24h' },
+  { hours: 48, label: '48h' },
+  { hours: 168, label: '7 dias' },
+];
+
 export default function RecentAlertsModal({ isOpen, onClose, incidents, isDarkMode, onSelectIncident }: RecentAlertsModalProps) {
+  const [query, setQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [hours, setHours] = useState(24);
+
+  const activeLabel = TIME_FILTERS.find(f => f.hours === hours)?.label ?? '24h';
+
+  const filtered = (() => {
+    const now = Date.now();
+    const q = query.trim().toLowerCase();
+    return incidents
+      .filter(i => now - i.timestamp <= hours * 60 * 60 * 1000)
+      .filter(i => !q || `${i.title} ${i.address} ${i.description}`.toLowerCase().includes(q))
+      .sort((a, b) => b.timestamp - a.timestamp);
+  })();
+
   return (
     <ResponsiveModal isOpen={isOpen} onClose={onClose} className="max-w-md h-[600px]" isDarkMode={isDarkMode}>
-      <div className={`flex items-center justify-between p-4 border-b shrink-0 ${isDarkMode ? 'border-[#333]' : 'border-gray-200'}`}>
+      <div className={`flex items-center justify-between p-4 pb-2 shrink-0 ${isDarkMode ? '' : ''}`}>
         <div className="flex items-baseline gap-2">
           <h2 className="text-lg font-semibold">Alertas Recentes</h2>
-          <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Últimas 24 horas</span>
+          <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Últimas {activeLabel}</span>
         </div>
         <button 
           onClick={onClose}
@@ -26,12 +48,64 @@ export default function RecentAlertsModal({ isOpen, onClose, incidents, isDarkMo
           <X size={16} />
         </button>
       </div>
+
+      {/* Busca + filtros */}
+      <div className="px-4 pb-3 shrink-0 space-y-2">
+        <div className="flex items-center gap-2">
+          <div className={`relative flex-1 min-w-0`}>
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar alerta..."
+              className={`w-full pl-8 pr-3 py-2 text-sm rounded-lg border focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
+                isDarkMode
+                  ? 'bg-[#2A2A2A] border-[#333] text-white placeholder:text-gray-500'
+                  : 'bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400'
+              }`}
+            />
+          </div>
+          <button
+            onClick={() => setShowFilters(v => !v)}
+            aria-label="Filtrar por período"
+            className={`shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center transition-colors ${
+              showFilters
+                ? 'bg-blue-600 border-blue-600 text-white'
+                : isDarkMode
+                  ? 'bg-[#2A2A2A] border-[#333] text-gray-300 hover:bg-[#333]'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <SlidersHorizontal size={16} />
+          </button>
+        </div>
+
+        {showFilters && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {TIME_FILTERS.map(f => (
+              <button
+                key={f.hours}
+                onClick={() => setHours(f.hours)}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  hours === f.hours
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : isDarkMode
+                      ? 'bg-[#2A2A2A] border-[#333] text-gray-300 hover:bg-[#333]'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar min-h-0">
+      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3 no-scrollbar min-h-0">
         {(() => {
-          const sorted = [...incidents].sort((a, b) => b.timestamp - a.timestamp);
-          return sorted.length > 0 ? (
-            sorted.map((incident) => (
+          return filtered.length > 0 ? (
+            filtered.map((incident) => (
               <PinnedItem 
                 key={incident.id} 
                 incident={incident} 
@@ -44,7 +118,7 @@ export default function RecentAlertsModal({ isOpen, onClose, incidents, isDarkMo
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-600">
               <Bell size={48} className="mb-4 opacity-20" />
-              <p>Nenhum alerta recente</p>
+              <p>{query.trim() ? 'Nenhum resultado para a busca' : 'Nenhum alerta recente'}</p>
             </div>
           );
         })()}

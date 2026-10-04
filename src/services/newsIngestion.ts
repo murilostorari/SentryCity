@@ -219,12 +219,21 @@ export async function confirmIngestion(input: ConfirmIngestionInput): Promise<Me
   let incidentRow: Incident;
 
   if (nearby) {
-    // Merge: cria relato de confirmação no incidente existente
-    await createIncidentReport({
-      incident_id: nearby.id,
-      type: 'confirm',
-      comment: `Relato via noticia (${input.source ?? 'desconhecida'})`,
-    });
+    // Merge: cria relato de confirmação no incidente existente.
+    // Tolerante a falhas (ex.: ingestor é o criador e o banco bloqueia
+    // confirmar o próprio incidente) — o merge segue mesmo assim.
+    try {
+      await createIncidentReport(
+        {
+          incident_id: nearby.id,
+          type: 'confirm',
+          comment: `Relato via noticia (${input.source ?? 'desconhecida'})`,
+        },
+        { allowUpsert: true },
+      );
+    } catch (err) {
+      console.warn('merge ingestão: relato de confirmação ignorado:', (err as Error)?.message);
+    }
 
     // Mapeia o incidente existente
     const timestamp = new Date(nearby.created_at).getTime();

@@ -1,6 +1,7 @@
 import { X, ExternalLink, Clock, AlertTriangle, Zap, Music, PartyPopper, Volume2, Ribbon, HelpCircle, Newspaper, Flame, ShieldAlert, Droplets, Construction } from 'lucide-react';
 import { Incident, IncidentNewsItem } from '../types/Incident';
 import ResponsiveModal from './ResponsiveModal';
+import Favicon from './Favicon';
 
 interface NewsModalProps {
   news: IncidentNewsItem[];
@@ -144,7 +145,12 @@ export default function NewsModal({ news, incident, isOpen, onClose, isDarkMode 
               ) : null}
               {!item.imageUrl && (
                 <div className={`absolute inset-0 flex items-center justify-center ${isDarkMode ? 'bg-[#2A2A2A]' : 'bg-gray-200'}`}>
-                  <Newspaper size={24} className={isDarkMode ? 'text-gray-600' : 'text-gray-400'} />
+                  <Favicon
+                    url={item.url}
+                    alt={item.source}
+                    className="w-8 h-8 rounded object-contain"
+                    fallback={<Newspaper size={24} className={isDarkMode ? 'text-gray-600' : 'text-gray-400'} />}
+                  />
                 </div>
               )}
             </div>

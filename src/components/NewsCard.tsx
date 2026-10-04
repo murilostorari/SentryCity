@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { ExternalLink, Clock, Plus, Newspaper } from 'lucide-react';
 import NewsModal from './NewsModal';
+import Favicon from './Favicon';
 import { Incident, IncidentNewsItem } from '../types/Incident';
 
 interface NewsCardProps {
@@ -59,7 +60,12 @@ export default function NewsCard({ news, incident, isDarkMode, isModalOpen, onOp
               ) : null}
               {!item.imageUrl && (
                 <div className={`absolute inset-0 flex items-center justify-center ${isDarkMode ? 'bg-[#2A2A2A]' : 'bg-gray-200'}`}>
-                  <Newspaper size={24} className={isDarkMode ? 'text-gray-600' : 'text-gray-400'} />
+                  <Favicon
+                    url={item.url}
+                    alt={item.source}
+                    className="w-8 h-8 rounded object-contain"
+                    fallback={<Newspaper size={24} className={isDarkMode ? 'text-gray-600' : 'text-gray-400'} />}
+                  />
                 </div>
               )}
             </a>
@@ -68,7 +74,14 @@ export default function NewsCard({ news, incident, isDarkMode, isModalOpen, onOp
             <div className="flex-1 flex flex-col justify-between min-w-0">
               <div>
                 <h3 className="font-bold text-sm leading-tight mb-1 line-clamp-2">
-                  {item.title}
+                  <a
+                    href={item.url || undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                  >
+                    {item.title}
+                  </a>
                 </h3>
                 <p className={`text-xs line-clamp-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   {item.description}
