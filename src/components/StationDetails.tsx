@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { X, Info, Clock, MapPin, Shield, Activity, CheckCircle2, XCircle, ShieldCheck, Loader2, MessageSquare, CheckCircle, RefreshCw, Bot } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts';
 import { Incident, ReportCounts, TimelineItem, ReportType, HourlyFrequencyData, ConfidenceDetails } from '../types/Incident';
-import { useIncidentReports, getReportTypeLabel as getReportTypeLabelFn, getReportTypeStyle as getReportTypeStyleFn, formatRelativeTime as formatRelativeTimeFn } from '../hooks/useIncidentReports';
+import { useIncidentReports, getReportTypeLabel as getReportTypeLabelFn, getReportTypeStyle as getReportTypeStyleFn, getSystemEventLabel as getSystemEventLabelFn, formatRelativeTime as formatRelativeTimeFn } from '../hooks/useIncidentReports';
 import { getHoursUntilAutoResolve, getAutoResolveDeadline, getAutoResolveHours, bumpIncidentActivity } from '../services/incidents';
 import ResponsiveModal from './ResponsiveModal';
 import { User } from '@supabase/supabase-js';
@@ -11,9 +11,12 @@ import { Profile } from '../types/Profile';
 
 const reportActions: { type: ReportType; label: string; icon: ReactNode; description: string }[] = [
   { type: 'confirm', label: 'Confirmar ocorrência', icon: <CheckCircle2 size={16} />, description: 'Confirmo que este incidente está ocorrendo' },
-  { type: 'resolved', label: 'Informar resolução', icon: <ShieldCheck size={16} />, description: 'O incidente foi resolvido/normalizado' },
+  { type: 'resolved', label: 'Informar resolução', icon: <ShieldCheck size={16} />, description: 'O incidente foi resolvido/normalizado — 2 resoluções sem contestação validam por consenso' },
   { type: 'deny', label: 'Negar ocorrência', icon: <XCircle size={16} />, description: 'Este incidente não está ocorrendo/é falso' },
 ];
+
+/** Carência do consenso de resolução (espelha auto_resolve_inactive_incidents no banco). */
+const CONSENSUS_GRACE_MS = 60 * 60 * 1000;
 
 const REPORT_TYPE_COLORS: Record<string, string> = {
   confirm: '#10B981',
@@ -86,10 +89,28 @@ export default function StationDetails({
     refreshConfidence
   } = useIncidentReports(incident.id);
 
-  // Última atividade = criação ou relato mais recente (espelha o auto-resolve do banco)
-  const lastActivityMs = reports.length
-    ? Math.max(incident.timestamp, ...reports.map(r => new Date(r.created_at).getTime()))
+  // Última atividade = criação ou relato NÃO-resolvido mais recente.
+  // 'resolved' NÃO renova o timer (espelha auto_resolve_inactive_incidents).
+  const activityReports = reports.filter(r => r.type !== 'resolved');
+  const lastActivityMs = activityReports.length
+    ? Math.max(incident.timestamp, ...activityReports.map(r => new Date(r.created_at).getTime()))
     : incident.timestamp;
+
+  // Consenso de resolução (espelha auto_resolve_inactive_incidents)
+  const isActiveIncident = incident.status === 'active' || incident.status === 'pending';
+  const lastContestMs = Math.max(
+    0,
+    ...reports.filter(r => r.type === 'confirm' || r.type === 'deny').map(r => new Date(r.created_at).getTime()),
+  );
+  const lastResolvedMs = Math.max(
+    0,
+    ...reports.filter(r => r.type === 'resolved').map(r => new Date(r.created_at).getTime()),
+  );
+  const consensusVotes = new Set(
+    reports.filter(r => r.type === 'resolved' && r.user_id).map(r => r.user_id),
+  ).size;
+  const consensusPending = isActiveIncident && consensusVotes >= 2 && lastResolvedMs > lastContestMs;
+  const consensusDeadlineMs = lastResolvedMs + CONSENSUS_GRACE_MS;
 
   useEffect(() => {
     const updateCountdown = () => {
@@ -103,6 +124,12 @@ export default function StationDetails({
         return;
       }
       if (incident.status === 'active' || incident.status === 'pending') {
+        if (consensusPending) {
+          const remaining = consensusDeadlineMs - Date.now();
+          // Carência vencida: o cron horário resolve em até 1h
+          setCountdown({ label: 'Resolução por consenso em', ms: remaining > 0 ? remaining : CONSENSUS_GRACE_MS });
+          return;
+        }
         const ms = (getAutoResolveDeadline(incident, lastActivityMs) ?? 0) - Date.now();
         if (ms > 0 && getHoursUntilAutoResolve(incident, lastActivityMs) > 0) {
           setCountdown({ label: 'Auto-resolve em', ms });
@@ -114,7 +141,7 @@ export default function StationDetails({
     updateCountdown();
     const interval = setInterval(updateCountdown, 30000);
     return () => clearInterval(interval);
-  }, [incident.id, incident.status, incident.timestamp, incident.expiresAt, lastActivityMs]);
+  }, [incident.id, incident.status, incident.timestamp, incident.expiresAt, lastActivityMs, consensusPending, consensusDeadlineMs]);
 
   const formatCountdown = (ms: number): string => {
     if (ms <= 0) return '0h 0m';
@@ -319,6 +346,8 @@ export default function StationDetails({
           bumpError={bumpError}
           formatCountdown={formatCountdown}
           lastActivityMs={lastActivityMs}
+          consensusVotes={consensusVotes}
+          consensusPending={consensusPending}
         />}
       </div>
 
@@ -708,7 +737,7 @@ function UnifiedTimelineItem({ item, key, currentUserId, currentUserName }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className={`text-xs font-bold ${style.text}`}>{isUserReport && item.report_type ? getReportTypeLabelFn(item.report_type) : item.event_type}</span>
+              <span className={`text-xs font-bold ${style.text}`}>{isUserReport && item.report_type ? getReportTypeLabelFn(item.report_type) : getSystemEventLabelFn(item.event_type)}</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap ${isCrawler ? 'bg-blue-50 dark:bg-[#172554] text-blue-600 dark:text-[#3B82F6]' : 'text-gray-400 dark:text-[#666666]'}`}>
                 {isCrawler && <Bot size={10} />}
                 {sourceLabel}
@@ -746,6 +775,8 @@ function ResourcesTab({
   bumpError,
   formatCountdown,
   lastActivityMs,
+  consensusVotes,
+  consensusPending,
 }: {
   incident: Incident;
   confidence: ConfidenceDetails | null;
@@ -761,6 +792,8 @@ function ResourcesTab({
   bumpError: string | null;
   formatCountdown: (ms: number) => string;
   lastActivityMs: number;
+  consensusVotes: number;
+  consensusPending: boolean;
 }) {
   const isActive = incident.status === 'active' || incident.status === 'pending';
   const autoResolveHours = getAutoResolveHours(incident.type);
@@ -843,9 +876,19 @@ function ResourcesTab({
               )}
             </div>
           )}
+          {consensusVotes >= 1 && (
+            <div className={`text-xs leading-relaxed ${consensusPending ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-[#888888]'}`}>
+              {consensusVotes >= 2
+                ? consensusPending
+                  ? `${consensusVotes} usuários informaram a resolução — validação por consenso em contagem (mínimo 2, 1h sem contestação).`
+                  : `${consensusVotes} usuários informaram a resolução, mas houve contestação posterior — consenso bloqueado.`
+                : '1 usuário informou a resolução — são necessários 2 (sem contestação) para validar por consenso.'}
+            </div>
+          )}
           <p className="text-xs text-gray-500 dark:text-[#888888] leading-relaxed">
             Resolve automaticamente após <strong>{autoResolveHours}h</strong> sem atividade
-            (última atividade: {lastActivity}). Qualquer relato — inclusive confirmações do crawler — reinicia o timer.
+            (última atividade: {lastActivity}). Confirmar, negar ou atualizar reinicia o timer;
+            informar resolução não reinicia — 2 resoluções sem contestação aceleram o fim (consenso).
           </p>
           {isCreator && (
             <p className="text-xs text-gray-400 dark:text-[#666666] leading-relaxed">

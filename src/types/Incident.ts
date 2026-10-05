@@ -51,6 +51,7 @@ export interface ConfidenceDetails {
     userConfirmWeights: number;
     userDenies: number;
     userResolved: number;
+    userResolvedWeights: number;
     aiConfidence?: number;
     sourceConfirmationsAvg?: number;
     sourceConfirmationsCount?: number;

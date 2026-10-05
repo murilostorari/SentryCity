@@ -138,7 +138,7 @@ export function useIncidentReports(incidentId: string | null) {
 }
 
 // Re-export para conveniência
-export { getReportTypeLabel, getReportTypeStyle, formatRelativeTime } from '../services/incidentReports';
+export { getReportTypeLabel, getReportTypeStyle, getSystemEventLabel, formatRelativeTime } from '../services/incidentReports';
 export type { ReportType, IncidentReportRow, ReportCounts, TimelineItem, HourlyFrequencyData, ConfidenceDetails, CreateIncidentReportInput } from '../services/incidentReports';
 
 // Re-export functions for use in components

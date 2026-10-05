@@ -70,6 +70,16 @@ export function getReportTypeLabel(type: ReportType): string {
   }
 }
 
+/** Mapeia event_type de eventos de sistema da timeline para label amigável. */
+export function getSystemEventLabel(eventType: string): string {
+  switch (eventType) {
+    case 'auto_resolved': return 'Auto-resolvido';
+    case 'manually_resolved': return 'Resolvido por moderação';
+    case 'resolved_by_consensus': return 'Resolvido por consenso';
+    default: return eventType;
+  }
+}
+
 /** Mapeia tipo do relato para cor/estilo. */
 export function getReportTypeStyle(type: ReportType): { bg: string; text: string; icon: string } {
   switch (type) {
@@ -299,23 +309,34 @@ export interface ConfidenceDetails {
     userConfirmWeights: number;
     userDenies: number;
     userResolved: number;
+    userResolvedWeights: number;
     aiConfidence?: number;
     sourceConfirmationsAvg?: number;
     sourceConfirmationsCount?: number;
   };
 }
 
-/** Busca a soma dos pesos (reputação/100) das confirmações de um incidente. */
-export async function fetchUserConfirmWeights(incidentId: string): Promise<number> {
-  const { data, error } = await supabase.rpc('get_incident_confirm_weights', { p_incident_id: incidentId });
+/** Busca a soma dos pesos (reputação/100) de confirms e resolved de um incidente. */
+export async function fetchIncidentReportWeights(
+  incidentId: string,
+): Promise<{ confirm: number; resolved: number }> {
+  const { data, error } = await supabase.rpc('get_incident_report_weights', { p_incident_id: incidentId });
 
   if (error) {
-    console.error('fetchUserConfirmWeights falhou:', error.message);
-    return 0;
+    console.error('fetchIncidentReportWeights falhou:', error.message);
+    return { confirm: 0, resolved: 0 };
   }
 
-  const rows = (data as { user_id: string; reputation_score: number }[] | null) ?? [];
-  return rows.reduce((sum, row) => sum + reputationToWeight(row.reputation_score), 0);
+  const rows = (data as { type: string; reputation_score: number }[] | null) ?? [];
+  return rows.reduce(
+    (acc, row) => {
+      const w = reputationToWeight(row.reputation_score);
+      if (row.type === 'confirm') acc.confirm += w;
+      else if (row.type === 'resolved') acc.resolved += w;
+      return acc;
+    },
+    { confirm: 0, resolved: 0 },
+  );
 }
 
 /** Busca detalhes de confiança de um incidente (para exibição). */
@@ -323,14 +344,14 @@ export async function fetchIncidentConfidence(incidentId: string): Promise<Confi
   // Buscar o incidente primeiro para saber se existe source_id válido
   const { data: incident } = await supabase.from('incidents').select('confidence_score, source_id').eq('id', incidentId).single();
 
-  const [{ data: source }, { data: reports }, { data: ai }, { data: confirmations }, confirmWeights] = await Promise.all([
+  const [{ data: source }, { data: reports }, { data: ai }, { data: confirmations }, reportWeights] = await Promise.all([
     incident?.source_id
       ? supabase.from('sources').select('trust_score').eq('id', incident.source_id).single()
       : Promise.resolve({ data: null } as { data: null }),
     supabase.from('incident_reports').select('type').eq('incident_id', incidentId),
     supabase.from('ai_analysis').select('confidence').eq('incident_id', incidentId).order('created_at', { ascending: false }).limit(1),
     supabase.from('incident_confirmations').select('similarity_score').eq('incident_id', incidentId).eq('confirmed', true),
-    fetchUserConfirmWeights(incidentId),
+    fetchIncidentReportWeights(incidentId),
   ]);
 
   const sourceTrust = source?.trust_score ?? 0.5;
@@ -342,7 +363,10 @@ export async function fetchIncidentConfidence(incidentId: string): Promise<Confi
   const sourceConfirmationsCount = confirmations?.length ?? 0;
 
   // Usar score do banco se disponível, senão calcular (com pesos de reputação)
-  const score = incident?.confidence_score ?? calculateSimpleConfidence(sourceTrust, userConfirms, userDenies, userResolved, confirmWeights);
+  const score = incident?.confidence_score ?? calculateSimpleConfidence(
+    sourceTrust, userConfirms, userDenies, userResolved,
+    reportWeights.confirm, reportWeights.resolved,
+  );
   const percentage = Math.round(score * 100);
 
   const labels = [
@@ -360,16 +384,17 @@ export async function fetchIncidentConfidence(incidentId: string): Promise<Confi
     label: labelInfo.label,
     color: labelInfo.color,
     bg: labelInfo.bg,
-    factors: {
-      sourceTrust,
-      userConfirms,
-      userConfirmWeights: Math.round(confirmWeights * 1000) / 1000,
-      userDenies,
-      userResolved,
-      aiConfidence,
-      sourceConfirmationsAvg,
-      sourceConfirmationsCount,
-    },
+  factors: {
+    sourceTrust,
+    userConfirms,
+    userConfirmWeights: Math.round(reportWeights.confirm * 1000) / 1000,
+    userDenies,
+    userResolved,
+    userResolvedWeights: Math.round(reportWeights.resolved * 1000) / 1000,
+    aiConfidence,
+    sourceConfirmationsAvg,
+    sourceConfirmationsCount,
+  },
   };
 }
 

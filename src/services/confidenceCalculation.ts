@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Função pura para calcular confidence_score baseada em:
  * - Fonte original (trust_score da source)
- * - Confirmações de usuários ponderadas por reputação (peso = reputação/100)
+ * - Confirmações e resoluções de usuários ponderadas por reputação (peso = reputação/100)
  * - Negativas de usuários (incident_reports type=deny)
  * - Análises de IA (ai_analysis.confidence)
  * - Confirmações de fontes (incident_confirmations)
@@ -22,6 +22,8 @@ export interface ConfidenceFactors {
   userDenies: number;
   /** Número de resoluções informadas */
   userResolved: number;
+  /** Soma dos pesos (reputação/100) das resoluções. Se ausente, usa userResolved */
+  userResolvedWeights?: number;
   /** Confiança da IA (se disponível) */
   aiConfidence?: number;
   /** Confiança média das confirmações de fontes (incident_confirmations) */
@@ -44,12 +46,18 @@ export function reputationToWeight(reputation: number): number {
 }
 
 /** Calcula score de relatos de usuários (-1 a 1, depois normalizado 0-1). */
-function calculateUserReportScore(confirmWeight: number, confirms: number, denies: number, resolved: number): number {
+function calculateUserReportScore(
+  confirmWeight: number,
+  confirms: number,
+  denies: number,
+  resolved: number,
+  resolvedWeight: number = resolved
+): number {
   const total = confirms + denies + resolved;
   if (total === 0) return 0.5; // Neutro se sem relatos
 
-  // Confirmações (ponderadas por reputação) e resoluções contam positivo, negações negativo
-  const positive = confirmWeight + resolved;
+  // Confirmações e resoluções (ambas ponderadas por reputação) contam positivo, negações negativo
+  const positive = confirmWeight + resolvedWeight;
   const negative = denies;
 
   // Score bruto: (positivo - negativo) / total
@@ -78,6 +86,7 @@ export function calculateIncidentConfidence(factors: ConfidenceFactors): number 
     userConfirmWeights,
     userDenies,
     userResolved,
+    userResolvedWeights,
     aiConfidence,
     sourceConfirmationsAvg,
     sourceConfirmationsCount,
@@ -86,9 +95,10 @@ export function calculateIncidentConfidence(factors: ConfidenceFactors): number 
   // 1. Source trust (já é 0-1)
   const sourceScore = sourceTrust;
 
-  // 2. User reports score (confirmações ponderadas por reputação)
+  // 2. User reports score (confirmações e resoluções ponderadas por reputação)
   const confirmWeight = userConfirmWeights ?? userConfirms;
-  const userScore = calculateUserReportScore(confirmWeight, userConfirms, userDenies, userResolved);
+  const resolvedWeight = userResolvedWeights ?? userResolved;
+  const userScore = calculateUserReportScore(confirmWeight, userConfirms, userDenies, userResolved, resolvedWeight);
 
   // 3. AI confidence (se disponível, senão neutro)
   const aiScore = aiConfidence ?? 0.5;
@@ -115,7 +125,8 @@ export function calculateSimpleConfidence(
   confirms: number,
   denies: number,
   resolved: number = 0,
-  confirmWeights?: number
+  confirmWeights?: number,
+  resolvedWeights?: number
 ): number {
   return calculateIncidentConfidence({
     sourceTrust,
@@ -123,6 +134,7 @@ export function calculateSimpleConfidence(
     userConfirmWeights: confirmWeights,
     userDenies: denies,
     userResolved: resolved,
+    userResolvedWeights: resolvedWeights,
   });
 }
 
