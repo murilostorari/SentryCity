@@ -138,6 +138,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
   const handleCityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setCity(value);
+    if (!street) setCoordinates(null);
 
     if (cityTimeout.current) clearTimeout(cityTimeout.current);
     if (value.length > 2) {
@@ -175,6 +176,12 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
     if (addr['ISO3166-2-lvl4'] || addr.state) {
       setState((addr['ISO3166-2-lvl4']?.split('-')[1]) || addr.state || '');
     }
+    if (!street && suggestion.lat && suggestion.lon) {
+      setCoordinates({
+        lat: parseFloat(suggestion.lat),
+        lng: parseFloat(suggestion.lon)
+      });
+    }
     setShowCitySuggestions(false);
   };
 
@@ -204,24 +211,32 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+
+    const trimmedCity = city.trim();
+    if (!trimmedCity) {
+      setSubmitError('A cidade é obrigatória para salvar o evento.');
+      setActiveTab('address');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       let finalLat = coordinates?.lat;
       let finalLng = coordinates?.lng;
-      let resolvedCity = city;
-      let resolvedState = state;
+      let resolvedCity = trimmedCity;
+      let resolvedState = state.trim();
 
-      // Sem coordenadas de uma sugestão, geocodifica o endereço completo.
+      // Sem coordenadas de uma sugestão, geocodifica o endereço ou a cidade.
       if (finalLat == null || finalLng == null) {
-        const query = [street, neighborhood, city].filter(Boolean).join(', ');
+        const query = [street.trim(), neighborhood.trim(), resolvedCity].filter(Boolean).join(', ');
         const result = await geocodeAddress(query, {
-          expectedCity: city || undefined,
-          expectedState: state || undefined,
+          expectedCity: resolvedCity || undefined,
+          expectedState: resolvedState || undefined,
         });
         if (!result) {
           setSubmitError(
-            'Não foi possível localizar esse endereço. Selecione uma sugestão ou verifique os dados.'
+            'Não foi possível localizar essa cidade ou endereço. Selecione uma sugestão ou verifique os dados.'
           );
           setIsSubmitting(false);
           return;
@@ -241,7 +256,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
         source: 'Manual',
         lat: finalLat,
         lng: finalLng,
-        address: street,
+        address: street.trim() || undefined,
         number,
         complement,
         neighborhood,
@@ -480,11 +495,10 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
 
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
-                <label className="block text-sm font-medium mb-1 opacity-70">Endereço</label>
+                <label className="block text-sm font-medium mb-1 opacity-70">Endereço (opcional)</label>
                 <input
                   ref={streetInputRef}
                   type="text"
-                  required
                   value={street}
                   onChange={handleStreetChange}
                   onFocus={() => {
@@ -561,7 +575,7 @@ export default function NewEventModal({ isOpen, onClose, onSave, isDarkMode }: N
 
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
-                <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
+                <label className="block text-sm font-medium mb-1 opacity-70">Cidade <span className="text-red-500">*</span></label>
                 <input
                   ref={cityInputRef}
                   type="text"

@@ -111,10 +111,29 @@ export default function App() {
 
   const handleNewsIngestionCreated = async (mergeResult?: { merged: boolean; incident?: any; existingIncident?: any }) => {
     await refresh();
+    const inc = mergeResult?.incident || mergeResult?.existingIncident;
+    if (inc) {
+      if (typeFilter.length > 0 && !typeFilter.includes(inc.type)) {
+        setTypeFilter([]);
+      }
+      if (severityFilter.length > 0 && !severityFilter.includes(inc.severity)) {
+        setSeverityFilter([]);
+      }
+      setSelectedStation(inc.id);
+      setShowDetails(true);
+      if (inc.lat && inc.lng) {
+        performSearch({ lat: inc.lat, lng: inc.lng, zoom: 15 });
+      }
+    }
     if (mergeResult?.merged) {
       toast.info(
         'Relato adicionado',
         `Evento existente: "${mergeResult.existingIncident?.title}" já registra esta ocorrência.`,
+      );
+    } else {
+      toast.success(
+        'Incidente criado',
+        'O incidente foi adicionado ao mapa com sucesso.',
       );
     }
   };

@@ -129,6 +129,15 @@ async function runIngestion({
 
   if (rawError) {
     console.error('ingestNewsText (raw_reports) falhou:', rawError.message);
+    if (
+      rawError.code === '23505' ||
+      rawError.message?.toLowerCase().includes('unique') ||
+      rawError.message?.toLowerCase().includes('duplicate') ||
+      rawError.message?.toLowerCase().includes('idx_raw_reports_original_url')
+    ) {
+      const fonte = sourceName ? ` dessa fonte (${sourceName})` : ' dessa fonte';
+      throw new Error(`Já existe no banco essa notícia${fonte}.`);
+    }
     throw new Error('Falha ao salvar a notícia original.');
   }
 
@@ -213,8 +222,18 @@ async function runIngestion({
 /** Etapa 2: confirma a criação do incidente + salva ai_analysis + marca raw_report.
  *  Se houver incidente existente do mesmo tipo a ≤200m, faz merge (cria relato confirm). */
 export async function confirmIngestion(input: ConfirmIngestionInput): Promise<MergeResult> {
-  // Verificar se já existe incidente próximo do mesmo tipo
-  const nearby = await findNearbyIncident(input.lat, input.lng, input.analysis.type);
+  // Verificar se já existe incidente recente do mesmo tipo e próximo (com título correlato)
+  const nearby = await findNearbyIncident(
+    input.lat,
+    input.lng,
+    input.analysis.type,
+    200,
+    {
+      maxAgeHours: 24,
+      title: input.analysis.title,
+      precision: input.analysis.location_precision,
+    }
+  );
 
   let incidentRow: Incident;
 
@@ -321,7 +340,7 @@ async function createIncidentFromIngestion(input: ConfirmIngestionInput): Promis
       status: 'active',
       latitude: input.lat,
       longitude: input.lng,
-      address: formatLocation(loc),
+      address: [loc.street, loc.number, loc.complement, loc.neighborhood].filter(Boolean).join(', ') || null,
       city: loc.city || null,
       state: loc.state || null,
       zip_code: loc.zip_code || null,

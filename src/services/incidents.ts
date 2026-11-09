@@ -293,21 +293,68 @@ export async function createIncident(input: CreateIncidentInput): Promise<Incide
 /** Raio padrão em metros para considerar dois incidentes como "mesmo local". */
 const DEFAULT_MERGE_RADIUS_METERS = 200;
 
+export interface FindNearbyOptions {
+  /** Idade máxima do incidente em horas para ser elegível a merge (default 24h). */
+  maxAgeHours?: number;
+  /** Título do evento a ser criado para verificação de sobreposição temática. */
+  title?: string;
+  /** Precisão da localização: 'city' e 'unknown' não fazem merge por distância. */
+  precision?: string;
+}
+
+const STOPWORDS = new Set([
+  'de', 'da', 'do', 'das', 'dos', 'em', 'no', 'na', 'nos', 'nas',
+  'a', 'o', 'as', 'os', 'e', 'ou', 'para', 'pra', 'com', 'sem',
+  'um', 'uma', 'uns', 'umas', 'por', 'pelo', 'pela', 'pelos', 'pelas',
+  'se', 'que', 'ao', 'aos', 'à', 'às', 'este', 'esta', 'neste', 'nesta'
+]);
+
+function extractKeywords(text: string): string[] {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w));
+}
+
+function hasTitleOverlap(titleA: string, titleB: string): boolean {
+  const wordsA = new Set(extractKeywords(titleA));
+  const wordsB = extractKeywords(titleB);
+  for (const w of wordsB) {
+    if (wordsA.has(w)) return true;
+  }
+  return false;
+}
+
 /**
  * Busca um incidente ativo do mesmo tipo dentro de um raio em metros.
- * Busca todos os ativos do tipo e calcula distância haversine no cliente.
+ * Busca todos os ativos do tipo criados nas últimas maxAgeHours (default 24h)
+ * e calcula distância haversine no cliente.
  */
 export async function findNearbyIncident(
   lat: number,
   lng: number,
   type: string,
   radiusMeters: number = DEFAULT_MERGE_RADIUS_METERS,
+  options?: FindNearbyOptions,
 ): Promise<IncidentRow | null> {
+  // Se a precisão for a nível de município ou desconhecida, NÃO faz merge por distância
+  // (coordenadas do centro da cidade gerariam falso positivo para todo o município).
+  if (options?.precision === 'city' || options?.precision === 'unknown') {
+    return null;
+  }
+
+  const maxAgeHours = options?.maxAgeHours ?? 24;
+  const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000).toISOString();
+
   const { data, error } = await supabase
     .from('incidents')
     .select('*')
     .eq('type', type)
-    .eq('status', 'active');
+    .eq('status', 'active')
+    .gte('created_at', cutoff);
 
   if (error) {
     console.error('findNearbyIncident query falhou:', error.message);
@@ -333,6 +380,9 @@ export async function findNearbyIncident(
   for (const candidate of candidates) {
     const dist = haversine(lat, lng, candidate.latitude, candidate.longitude);
     if (dist <= radiusMeters && dist < closestDist) {
+      if (options?.title && !hasTitleOverlap(options.title, candidate.title)) {
+        continue;
+      }
       closest = candidate;
       closestDist = dist;
     }
@@ -365,6 +415,7 @@ export async function mergeOrCreateIncident(
     input.longitude,
     input.type,
     radiusMeters,
+    { title: input.title },
   );
 
   if (nearby) {

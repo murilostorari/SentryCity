@@ -185,14 +185,43 @@ export interface GeocodeOptions {
   expectedState?: string;
 }
 
+/** Gera variações progressivamente mais simples do endereço (ex: remove número, bairro, prefixos). */
+function buildAddressVariations(query: string, city: string, state?: string): string[] {
+  const variations: string[] = [];
+  const cityState = [city, state].filter(Boolean).join(', ');
+
+  const parts = query.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const street = parts[0];
+
+    // Variação 1: rua + cidade + estado (sem número e sem bairro)
+    const varA = `${street}, ${cityState}`;
+    if (normalizeText(varA) !== normalizeText(query)) {
+      variations.push(varA);
+    }
+
+    // Variação 2: simplifica prefixos de logradouro (Rua, Av, Alameda...) e títulos (Dr., Prof...)
+    const simplified = street
+      .replace(/^(rua|avenida|alameda|travessa|rodovia|estrada|r\.|av\.|al\.|trav\.|rod\.)\s+/i, '')
+      .replace(/\b(doutor|dr\.|professor|prof\.|coronel|cel\.|padre|pe\.|vereador|ver\.)\s+/gi, '')
+      .trim();
+
+    if (simplified && simplified !== street) {
+      variations.push(`${simplified}, ${cityState}`);
+    }
+  }
+
+  return variations;
+}
+
 /**
  * Geocodifica um endereço textual completo. Retorna o primeiro resultado ou
  * `null` quando nada é encontrado. Tenta Nominatim e cai para Photon como
  * fallback (evita o erro "Não foi possível geocodificar" em falhas da primeira).
  *
  * Quando `expectedCity` é informado, descarta resultados de outras cidades e,
- * se nada casar, geocodifica apenas "cidade, estado" para garantir que o
- * ponto caia no município correto (centro da cidade).
+ * se nada casar, tenta variações simplificadas do endereço antes de geocodificar
+ * apenas "cidade, estado" (centro do município).
  */
 export async function geocodeAddress(
   query: string,
@@ -208,6 +237,15 @@ export async function geocodeAddress(
 
   if (expectedCity) {
     if (result) return result;
+
+    // Tenta variações mais enxutas da rua antes de desistir para o centro do município
+    const variations = buildAddressVariations(query, expectedCity, options?.expectedState);
+    for (const v of variations) {
+      const varRes =
+        (await geocodeWithNominatim(v, expectedCity)) ??
+        (await geocodeWithPhoton(v, expectedCity));
+      if (varRes) return varRes;
+    }
 
     // Fallback: geocodifica só a cidade para não plotar em outro município.
     const cityQuery = [expectedCity, options?.expectedState]

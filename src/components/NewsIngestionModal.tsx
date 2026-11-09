@@ -145,7 +145,11 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
     setIsRegeocoding(true);
     setError(null);
     try {
-      const query = buildGeocodeQuery(loc);
+      const query = buildGeocodeQuery(loc) || loc.city;
+      if (!query.trim()) {
+        setError('Informe a cidade para localizar.');
+        return;
+      }
       const geo = await geocodeAddress(query, {
         expectedCity: loc.city || undefined,
         expectedState: loc.state || undefined,
@@ -153,11 +157,17 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
       if (geo) {
         setLat(geo.lat);
         setLng(geo.lng);
+        if (!loc.city && geo.city) {
+          setLoc((prev) => ({ ...prev, city: geo.city }));
+        }
+        if (!loc.state && geo.state) {
+          setLoc((prev) => ({ ...prev, state: geo.state }));
+        }
         if (!loc.zip_code && geo.zipCode) {
           setLoc((prev) => ({ ...prev, zip_code: geo.zipCode || '' }));
         }
       } else {
-        setError('Não foi possível geocodificar o endereço. Verifique os dados.');
+        setError('Não foi possível geocodificar o local. Verifique a cidade ou endereço informado.');
       }
     } finally {
       setIsRegeocoding(false);
@@ -190,10 +200,39 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
   };
 
   const handleConfirm = async () => {
-    if (!result || lat == null || lng == null) {
-      setError('É necessário localizar o endereço (lat/lng) antes de criar o incidente.');
+    if (!result) return;
+
+    const trimmedCity = loc.city?.trim();
+    if (!trimmedCity) {
+      setError('A cidade é obrigatória para criar o incidente.');
+      setActiveTab('address');
       return;
     }
+
+    let finalLat = lat;
+    let finalLng = lng;
+
+    if (finalLat == null || finalLng == null) {
+      setIsRegeocoding(true);
+      setError(null);
+      const query = buildGeocodeQuery(loc) || trimmedCity;
+      const geo = await geocodeAddress(query, {
+        expectedCity: trimmedCity || undefined,
+        expectedState: loc.state || undefined,
+      });
+      setIsRegeocoding(false);
+
+      if (geo) {
+        finalLat = geo.lat;
+        finalLng = geo.lng;
+        setLat(geo.lat);
+        setLng(geo.lng);
+      } else {
+        setError('Não foi possível localizar a cidade ou endereço (lat/lng) antes de criar o incidente.');
+        return;
+      }
+    }
+
     setIsConfirming(true);
     setError(null);
     try {
@@ -210,8 +249,8 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
           location_precision: locationPrecision,
           location: loc,
         },
-        lat,
-        lng,
+        lat: finalLat,
+        lng: finalLng,
         address: formatLocation(loc),
       });
       onCreated(mergeResult);
@@ -337,11 +376,11 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
               <MapPin size={14} className="shrink-0" />
               {lat != null && lng != null ? (
                 <span className="truncate">
-                  {formatLocation(loc) || 'Local encontrado'}{' '}
+                  {formatLocation(loc) || loc.city || 'Local encontrado'}{' '}
                   <span className="opacity-60">({lat.toFixed(5)}, {lng.toFixed(5)})</span>
                 </span>
               ) : (
-                <span>Localização não encontrada. Ajuste o endereço e clique em Localizar.</span>
+                <span>Localização não encontrada. Ajuste a cidade ou endereço e clique em Localizar.</span>
               )}
               <button
                 onClick={handleRegeocode}
@@ -501,7 +540,7 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
                 </div>
               </div>
               <div className="col-span-2">
-                <label className="block text-sm font-medium mb-1 opacity-70">Logradouro</label>
+                <label className="block text-sm font-medium mb-1 opacity-70">Logradouro (opcional)</label>
                 <input type="text" value={loc.street} onChange={(e) => setLocField('street', e.target.value)} className={inputClass(isDarkMode)} placeholder="Rua, Avenida..." />
               </div>
             </div>
@@ -524,7 +563,7 @@ export default function NewsIngestionModal({ isOpen, onClose, onCreated, isDarkM
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1 opacity-70">Cidade</label>
+                <label className="block text-sm font-medium mb-1 opacity-70">Cidade <span className="text-red-500">*</span></label>
                 <input type="text" value={loc.city} onChange={(e) => setLocField('city', e.target.value)} className={inputClass(isDarkMode)} />
               </div>
               <div>
